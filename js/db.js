@@ -102,12 +102,18 @@ const DEFAULT_SETTINGS = {
   imageModel: 'gemini-3-pro-image',
   textModel: 'gemini-3-flash-preview',
   studioName: '',
-  supabaseUrl: '',           // sincronización entre dispositivos
-  supabaseAnon: '',
+  // Sincronización entre dispositivos (proyecto Supabase "estudiorender").
+  // La clave anon es pública por diseño: el acceso está limitado por RLS a los proyectos de cada usuario.
+  supabaseUrl: 'https://mbvryfdnrezzbrcjjixl.supabase.co',
+  supabaseAnon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1idnJ5ZmRucmV6emJyY2pqaXhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUwNDA3MDksImV4cCI6MjExMDYxNjcwOX0.VJtmyCBB8hGrojMcCXEo4oPGR-XQqQ-TGCsCfaIG9UM',
 };
 export function getSettings() {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    const out = { ...DEFAULT_SETTINGS, ...saved };
+    if (!out.supabaseUrl) out.supabaseUrl = DEFAULT_SETTINGS.supabaseUrl;
+    if (!out.supabaseAnon) out.supabaseAnon = DEFAULT_SETTINGS.supabaseAnon;
+    return out;
   } catch { return { ...DEFAULT_SETTINGS }; }
 }
 export function setSettings(s) {

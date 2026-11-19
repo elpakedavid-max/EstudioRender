@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin conexión (los renders automáticos sí necesitan internet).
-const CACHE = 'estudiorender-v2';
+const CACHE = 'estudiorender-v3';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/db.js', 'js/plan.js', 'js/catalog.js', 'js/prompt.js', 'js/ai.js', 'js/video.js', 'js/present.js', 'js/sync.js',
