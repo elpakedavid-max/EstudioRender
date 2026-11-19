@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EstudioRender · Del boceto al render, delante del cliente</title>
+<meta name="description" content="App para arquitectos e interioristas: plano con el lápiz, muebles reales de tienda, renders fotorrealistas con IA y presentación para el cliente en minutos.">
+<meta property="og:title" content="EstudioRender · Del boceto al render, delante del cliente">
+<meta property="og:description" content="Plano con el lápiz, muebles reales, renders con IA y presentación para tu cliente, en la propia obra.">
+<meta property="og:image" content="render-altillo.jpg">
+<link rel="icon" href="../icons/icon-192.png">
+<style>
+:root { --ink:#1f1f1d; --muted:#6b6a64; --paper:#f6f4ee; --line:#e2dfd6; --accent:#c2552d; --soft:#f6e3da; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--paper); line-height: 1.55; }
+a { color: inherit; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+header { position: sticky; top: 0; z-index: 10; background: rgba(31,31,29,.94); color: #fff; backdrop-filter: blur(6px); }
+header .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
+header b { font-size: 19px; letter-spacing: -.01em; }
+header nav { margin-left: auto; display: flex; gap: 22px; font-size: 15px; }
+header nav a { text-decoration: none; opacity: .85; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; border: 2px solid var(--ink); background: #fff; color: var(--ink); font-size: 16px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.dark { background: var(--ink); color: #fff; }
+.btn.small { padding: 9px 16px; font-size: 14px; }
+.hero { padding: 72px 0 40px; }
+.hero .grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: center; }
+.eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 13px; color: var(--accent); font-weight: 700; }
+h1 { font-size: clamp(38px, 5.2vw, 64px); line-height: 1.04; margin: 12px 0 18px; letter-spacing: -.025em; }
+h1 em { font-style: normal; color: var(--accent); }
+.lead { font-size: 19px; color: #3d3c38; max-width: 540px; }
+.ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.video { position: relative; border-radius: 18px; overflow: hidden; border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); background: #000; }
+.video video { width: 100%; display: block; }
+section { padding: 72px 0; }
+h2 { font-size: clamp(30px, 3.6vw, 44px); margin: 0 0 12px; letter-spacing: -.02em; line-height: 1.1; }
+.sub { color: var(--muted); font-size: 18px; max-width: 720px; margin: 0 0 40px; }
+.ba { display: grid; grid-template-columns: .55fr 1.45fr; gap: 20px; align-items: stretch; }
+.ba figure { margin: 0; position: relative; border-radius: 16px; overflow: hidden; background: #ddd; }
+.ba img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ba figcaption { position: absolute; left: 14px; top: 14px; background: var(--ink); color: #fff; font-weight: 700; font-size: 14px; padding: 6px 12px; border-radius: 8px; }
+.ba figure.after figcaption { background: var(--accent); }
+.steps { display: grid; gap: 56px; }
+.step { display: grid; grid-template-columns: 1fr 1.35fr; gap: 44px; align-items: center; }
+.step:nth-child(even) .txt { order: 2; }
+.num { display: inline-flex; width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 22px; align-items: center; justify-content: center; margin-bottom: 12px; }
+.step h3 { font-size: 28px; margin: 0 0 10px; letter-spacing: -.01em; }
+.step p { color: #3d3c38; margin: 0 0 12px; font-size: 17px; }
+.step ul { margin: 0; padding-left: 20px; color: #3d3c38; }
+.step li { margin: 4px 0; }
+.shot { border-radius: 14px; overflow: hidden; border: 2px solid var(--ink); box-shadow: 8px 8px 0 rgba(31,31,29,.9); background: #fff; }
+.shot img { width: 100%; display: block; }
+.stores { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.stores span { border: 1.5px solid var(--ink); border-radius: 999px; padding: 4px 12px; font-size: 14px; background: #fff; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.feat { background: #fff; border: 2px solid var(--ink); border-radius: 16px; padding: 22px; }
+.feat b { display: block; font-size: 18px; margin-bottom: 6px; }
+.feat span { color: var(--muted); }
+.feat .ic { font-size: 28px; display: block; margin-bottom: 10px; }
+.who { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.who span { background: var(--soft); color: #7a3417; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
+.cta { background: var(--ink); color: #fff; border-radius: 24px; padding: 56px 40px; text-align: center; }
+.cta h2 { color: #fff; }
+.cta p { color: #d6d3c9; font-size: 18px; margin: 0 auto 28px; max-width: 640px; }
+.cta .btn { border-color: #fff; }
+footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; text-align: center; }
+@media (max-width: 860px) {
+  header nav { display: none; }
+  .hero .grid, .step, .ba { grid-template-columns: 1fr; }
+  .step:nth-child(even) .txt { order: 0; }
+  .features { grid-template-columns: 1fr; }
+  .video { box-shadow: 6px 6px 0 var(--ink); }
+  .cta { padding: 40px 22px; }
+}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <b>EstudioRender</b>
+  <nav><a href="#como">Cómo funciona</a><a href="#ventajas">Ventajas</a><a href="#contacto">Contacto</a></nav>
+  <a class="btn primary small" href="../">Probar la app</a>
+</div></header>
+
+<div class="wrap hero">
+  <div class="grid">
+    <div>
+      <div class="eyebrow">Para arquitectos e interioristas</div>
+      <h1>Del boceto al render, <em>delante del cliente</em></h1>
+      <p class="lead">Haz una foto del espacio, dibuja el plano con el lápiz del iPad, elige muebles reales de tienda y enséñale al cliente cómo quedará en minutos, no en días.</p>
+      <div class="ctas">
+        <a class="btn primary" href="../?ejemplo">Ver un proyecto de ejemplo</a>
+        <a class="btn" href="#video">▶ Ver el vídeo (1 min)</a>
+      </div>
+    </div>
+    <div class="video" id="video">
+      <video src="video-explicativo.mp4" poster="poster.jpg" controls playsinline preload="metadata"></video>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>Del local vacío… a esto</h2>
+    <p class="sub">Un caso real: un local de 5 × 7 m convertido en loft con cama en altillo. Foto de la visita y render generado con la app.</p>
+    <div class="ba">
+      <figure><img src="antes.jpg" alt="Foto del local antes de la reforma"><figcaption>Antes</figcaption></figure>
+      <figure class="after"><img src="render-altillo.jpg" alt="Render del loft con altillo"><figcaption>Propuesta</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="como">
+  <div class="wrap">
+    <h2>Cómo funciona</h2>
+    <p class="sub">Cinco pasos, todo en la misma app, en el iPad, el ordenador o el móvil.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="txt"><div class="num">1</div><h3>Fotos, medidas y lo que quiere el cliente</h3>
+          <p>Toma fotos del espacio, apunta las medidas y describe lo que pide el cliente: estilo, materiales, techo y luz.</p>
+          <ul><li>Proyectos guardados por cliente y por estado</li><li>Borrador, en curso, presentado o finalizado</li></ul></div>
+        <div class="shot"><img src="cap-ficha.jpg" alt="Ficha del proyecto" loading="lazy"></div>
+      </div>
+      <div class="step">
+        <div class="txt"><div class="num">2</div><h3>Dibuja el plano con el lápiz</h3>
+          <p>Las paredes se enderezan solas y muestran la medida. Arrastras los muebles y los estiras o giras con el dedo, sin escribir números.</p>
+          <ul><li>Puertas, ventanas, correderas y altillos</li><li>Más de 70 piezas con medidas reales</li><li>Cotas, flechas, zonas y notas escritas a mano</li></ul></div>
+        <div class="shot"><img src="cap-plano.jpg" alt="Editor de plano" loading="lazy"></div>
+      </div>
+      <div class="step">
+        <div class="txt"><div class="num">3</div><h3>Muebles reales de tienda</h3>
+          <p>A cada pieza se le puede asignar el producto real, con enlace, foto y precio. Ese mueble aparece en el render y suma en el presupuesto.</p>
+          <div class="stores"><span>IKEA</span><span>Leroy Merlin</span><span>Kave Home</span><span>Maisons du Monde</span><span>Zara Home</span><span>El Corte Inglés</span><span>Conforama</span><span>Sklum</span><span>Bauhaus</span><span>Roca</span><span>Porcelanosa</span><span>Amazon</span></div></div>
+        <div class="shot"><img src="render-entrada.jpg" alt="Render con mobiliario" loading="lazy"></div>
+      </div>
+      <div class="step">
+        <div class="txt"><div class="num">4</div><h3>Render fotorrealista con IA</h3>
+          <p>La app prepara todo a partir de la foto, el plano y el estilo, y genera el render con Gemini o ChatGPT. Las correcciones se piden con palabras: "pon la nevera a la derecha".</p>
+          <ul><li>Vista desde la entrada, desde el fondo, laterales o aérea</li><li>Las distintas vistas mantienen el mismo estilo</li></ul></div>
+        <div class="shot"><img src="cap-renders.jpg" alt="Renders y galería" loading="lazy"></div>
+      </div>
+      <div class="step">
+        <div class="txt"><div class="num">5</div><h3>Compártelo con el cliente al momento</h3>
+          <p>Desde la misma app salen un vídeo con música y una presentación con los renders, el plano y la lista de compra, que el cliente abre en su móvil sin instalar nada.</p>
+          <ul><li>Vídeo horizontal o vertical para WhatsApp</li><li>Lista de compra con el total, descargable para Excel</li></ul></div>
+        <div class="shot"><img src="cap-cliente.jpg" alt="Vídeo y presentación para el cliente" loading="lazy"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="ventajas">
+  <div class="wrap">
+    <h2>Pensada para trabajar en la obra</h2>
+    <p class="sub">Sin programas complicados ni esperar al estudio de render.</p>
+    <div class="features">
+      <div class="feat"><span class="ic">✏️</span><b>Hecha para el iPad y el lápiz</b><span>Se instala desde el navegador en un minuto y funciona también sin conexión.</span></div>
+      <div class="feat"><span class="ic">🔄</span><b>Sincronizada</b><span>Los mismos proyectos en el iPad, el ordenador y el móvil.</span></div>
+      <div class="feat"><span class="ic">🛋️</span><b>Muebles reales</b><span>Productos de tienda con precio, para el render y el presupuesto.</span></div>
+      <div class="feat"><span class="ic">✨</span><b>IA que tú eliges</b><span>Gemini o ChatGPT, en modo automático o manual sin coste.</span></div>
+      <div class="feat"><span class="ic">🎬</span><b>Vídeo y presentación</b><span>Contenido listo para enviar por WhatsApp o email.</span></div>
+      <div class="feat"><span class="ic">🏷️</span><b>Con tu marca</b><span>El nombre de tu estudio aparece en el vídeo y en la presentación.</span></div>
+    </div>
+    <h3 style="margin:44px 0 10px;font-size:22px">Para quién</h3>
+    <div class="who"><span>Arquitectos</span><span>Interioristas</span><span>Empresas de reformas</span><span>Inmobiliarias</span><span>Tiendas de cocinas y baños</span></div>
+  </div>
+</section>
+
+<section id="contacto">
+  <div class="wrap">
+    <div class="cta">
+      <h2>¿Lo probamos con uno de tus proyectos?</h2>
+      <p>Te lo enseñamos en 20 minutos con fotos de una obra tuya. Así ves el resultado con tus propios espacios.</p>
+      <div class="ctas" style="justify-content:center">
+        <a class="btn primary" href="mailto:soporte@mrpc.es?subject=Demo%20EstudioRender&body=Hola%2C%20me%20gustar%C3%ADa%20ver%20una%20demo%20de%20EstudioRender.">Pedir una demo</a>
+        <a class="btn" href="../?ejemplo">Abrir el ejemplo</a>
+      </div>
+      <p style="margin-top:26px;font-size:15px">MR Informática · Marbella · soporte@mrpc.es</p>
+    </div>
+  </div>
+</section>
+
+<footer>EstudioRender · Las imágenes generadas son orientativas y pueden variar respecto al resultado final.</footer>
+</body>
+</html>

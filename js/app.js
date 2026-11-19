@@ -165,11 +165,12 @@ async function renderHome() {
       <button class="card new" id="new">+ Nuevo proyecto</button>
       ${cards.join('')}
     </div>
-    <div class="row" style="margin-top:24px"><button class="btn" id="import">Importar proyecto (.json)</button>
+    <div class="row" style="margin-top:24px"><button class="btn dark" id="example">Ver proyecto de ejemplo</button><button class="btn" id="import">Importar proyecto (.json)</button>
       ${sync.loggedIn() ? `<button class="btn" id="sync-now">Sincronizar ahora</button><span class="muted small" id="sync-status">${esc(syncStatus || 'Sincronización activa: ' + (sync.session()?.email || ''))}</span>`
         : '<span class="muted small">Para tener los proyectos en el iPad y en el ordenador, activa la sincronización en Ajustes.</span>'}</div>
   </div>`;
   $('#new').onclick = newProject;
+  $('#example').onclick = openExample;
   const fl = $('#filters'); if (fl) fl.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { renderHome.filter = b.dataset.f; renderHome(); } };
   const sn = $('#sync-now');
   if (sn) sn.onclick = async () => {
@@ -862,7 +863,12 @@ async function exportProject() {
 async function importProject() {
   const [f] = await pickFiles('.json,application/json', false); if (!f) return;
   try {
-    const data = JSON.parse(await f.text());
+    await importData(JSON.parse(await f.text()));
+    toast('Proyecto importado'); renderHome();
+  } catch (e) { toast('No se pudo importar: ' + e.message, 5000); }
+}
+
+async function importData(data) {
     if (data.app !== 'estudiorender') throw new Error('No es un proyecto de EstudioRender');
     const map = {};
     for (const [oldId, fd] of Object.entries(data.files || {})) {
@@ -876,11 +882,22 @@ async function importProject() {
     p.renders = p.renders.map((r) => ({ ...r, fileId: map[r.fileId] })).filter((r) => r.fileId);
     (p.plan?.items || []).forEach((it) => { if (it.product?.fileId) it.product.fileId = map[it.product.fileId] || ''; });
     await db.saveProject(p);
-    toast('Proyecto importado'); renderHome();
-  } catch (e) { toast('No se pudo importar: ' + e.message, 5000); }
+    return p;
+}
+
+// Proyecto de ejemplo (loft) para probar la app con contenido
+async function openExample() {
+  const existing = (await db.listProjects()).find((x) => x.demo);
+  if (existing) { location.hash = `#p/${existing.id}/plano`; return; }
+  toast('Cargando el proyecto de ejemplo…');
+  try {
+    const data = await (await fetch('demo/ejemplo.estudiorender.json')).json();
+    const p = await importData(data);
+    location.hash = `#p/${p.id}/plano`;
+  } catch (e) { toast('No se pudo cargar el ejemplo: ' + e.message, 5000); }
 }
 
 // ---------- arranque
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-route();
+if (/[?&]ejemplo/.test(location.search)) { history.replaceState(null, '', location.pathname); openExample(); } else route();
 if (sync.loggedIn() && navigator.onLine) sync.syncNow(setSyncStatus).then((r) => { if (!current && (r.down || r.del)) renderHome(); }).catch((e) => setSyncStatus('Sin sincronizar: ' + e.message));
