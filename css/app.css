@@ -162,3 +162,6 @@ a.btn.dark, a.btn.primary { color: #fff; }
 .shop-list td, .shop-list th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
 .shop-list img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; display: block; }
 .shop-list .num { text-align: right; white-space: nowrap; }
+
+.product-box.top { border-top: 0; margin-top: 0; padding: 10px 12px 12px; background: var(--accent-soft); border-radius: 12px; margin-bottom: 14px; }
+.product-box.top h3 { margin-top: 2px; }

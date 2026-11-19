@@ -326,15 +326,18 @@ function setTool(t) {
   renderSide();
 }
 
+let lastSideKey = '';
 function renderSide() {
   const side = $('#side'); if (!side || !editor) return;
   const sel = editor.getSelected();
+  const key = `${editor.tool}:${sel?.obj?.id || ''}`;
+  if (key !== lastSideKey) { side.scrollTop = 0; lastSideKey = key; }
   if (editor.tool === 'item') {
     const room = current.roomType;
     const cats = {};
     CATALOG.forEach((c) => { (cats[c.cat] = cats[c.cat] || []).push(c); });
     const order = Object.keys(cats).sort((a, b) => (cats[b].some((c) => c.rooms.includes(room)) ? 1 : 0) - (cats[a].some((c) => c.rooms.includes(room)) ? 1 : 0));
-    side.innerHTML = `<h3>Piezas</h3><div class="catalog">${order.map((cat) => `<div class="cat">${cat}</div>${cats[cat].map((c) => `<button data-type="${c.type}" class="${editor.itemType === c.type ? 'on' : ''}">${esc(c.label)}<br><span class="muted small">${c.w}×${c.d}</span></button>`).join('')}`).join('')}</div>`;
+    side.innerHTML = `<h3>Muebles</h3><p class="muted small" style="margin-top:-4px">Elige una pieza y toca el plano para colocarla. Después, tócala para elegir el <b>modelo real de tienda</b> (IKEA, Leroy Merlin, Kave Home…).</p><div class="catalog">${order.map((cat) => `<div class="cat">${cat}</div>${cats[cat].map((c) => `<button data-type="${c.type}" class="${editor.itemType === c.type ? 'on' : ''}">${esc(c.label)}<br><span class="muted small">${c.w}×${c.d}</span></button>`).join('')}`).join('')}</div>`;
     side.onclick = (e) => { const b = e.target.closest('[data-type]'); if (!b) return; editor.itemType = b.dataset.type; editor.setTool('item', b.dataset.type); $$('.catalog button', side).forEach((x) => x.classList.toggle('on', x === b)); $('#hint').textContent = 'Ahora toca el plano donde quieras colocarla.'; };
     return;
   }
@@ -384,7 +387,7 @@ async function renderProductBox(box, o) {
   const q = `${o.label} ${o.w}x${o.d}`;
   if (pr && !box.dataset.editing) {
     const img = pr.fileId ? await db.fileURL(pr.fileId) : '';
-    box.innerHTML = `<h3>Producto real</h3>
+    box.innerHTML = `<h3>Mueble de tienda</h3>
       <div class="product-card">${img ? `<img src="${img}" alt="">` : '<div class="noimg">Sin foto</div>'}
         <div><b>${esc(pr.name || 'Producto')}</b><span class="muted small">${esc(storeName(pr.store))}${pr.price ? ' · ' + fmtEUR(pr.price) : ''}</span>
         ${pr.url ? `<a class="small" href="${esc(pr.url)}" target="_blank" rel="noopener">Ver en la tienda ↗</a>` : ''}</div></div>
@@ -395,8 +398,8 @@ async function renderProductBox(box, o) {
     return;
   }
   const v = pr || {};
-  box.innerHTML = `<h3>Producto real</h3>
-    <p class="muted small">Busca el mueble en una tienda, copia el enlace y una foto, y vincúlalo a esta pieza.</p>
+  box.innerHTML = `<h3>¿De qué tienda es este mueble?</h3>
+    <p class="muted small">1. Pulsa una tienda para ver sus modelos. 2. Copia el enlace del que te guste y pégalo abajo. 3. Añade su foto y el precio.</p>
     <div class="stores">${STORES.map((st) => `<a class="chip small" href="${esc(storeSearchURL(st, q))}" target="_blank" rel="noopener">${esc(st.name)}</a>`).join('')}</div>
     <div class="field"><label>Enlace del producto</label><input id="p-url" value="${esc(v.url || '')}" placeholder="https://…"></div>
     <div class="field"><label>Nombre / modelo</label><input id="p-name" value="${esc(v.name || '')}" placeholder="Ej.: Sofá KIVIK 3 plazas gris"></div>
@@ -429,13 +432,14 @@ function renderInspector(side, sel) {
   const o = sel.obj;
   if (sel.kind === 'item') {
     side.innerHTML = `<div class="inspector"><h3>${esc(o.label)}</h3>
+      <div id="i-product" class="product-box top"></div>
+      <h3>Medidas y posición</h3>
       <div class="field"><label>Nombre</label><input id="i-label" value="${esc(o.label)}"></div>
       <div class="row"><div class="field" style="flex:1"><label>Ancho (cm)</label><input id="i-w" type="number" value="${o.w}"></div>
       <div class="field" style="flex:1"><label>Fondo (cm)</label><input id="i-d" type="number" value="${o.d}"></div></div>
       <div class="field"><label>Nivel</label><select id="i-level"><option value="baja" ${o.level !== 'alta' ? 'selected' : ''}>Planta baja</option><option value="alta" ${o.level === 'alta' ? 'selected' : ''}>Altillo (nivel alto)</option></select></div>
       <div class="field"><label>Giro: <b id="i-rotv">${o.rot || 0}°</b></label><input id="i-rotr" type="range" min="0" max="345" step="15" value="${o.rot || 0}"></div>
-      <div class="row"><button class="btn" id="i-rot">Girar 90°</button><button class="btn" id="i-dup">Duplicar</button><button class="btn danger" id="i-del">Borrar</button></div>
-      <div id="i-product" class="product-box"></div></div>`;
+      <div class="row"><button class="btn" id="i-rot">Girar 90°</button><button class="btn" id="i-dup">Duplicar</button><button class="btn danger" id="i-del">Borrar</button></div></div>`;
     renderProductBox($('#i-product'), o);
     $('#i-label').onchange = (e) => editor.update(() => { o.label = e.target.value; });
     $('#i-w').onchange = (e) => editor.update(() => { o.w = Math.max(5, Number(e.target.value) || o.w); });
