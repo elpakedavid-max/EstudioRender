@@ -1,11 +1,12 @@
 import * as db from './db.js';
 import { ROOM_TYPES, CATALOG } from './catalog.js';
 import { PlanEditor, emptyPlan, planPNG, fmtM } from './plan.js';
-import { renderPrompt, editPrompt, videoPrompt, VIEWS, STYLES, LIGHTS, CAMERA_MOVES } from './prompt.js';
+import { renderPrompt, editPrompt, videoPrompt, productRefs, VIEWS, STYLES, LIGHTS, CAMERA_MOVES } from './prompt.js';
 import { generateImage, proposeLayout, autoReady, layoutReady, providerLabel } from './ai.js';
 import { buildTimeline, drawFrame, recordVideo } from './video.js';
 import { buildPresentation } from './present.js';
 import * as sync from './sync.js';
+import { STORES, storeSearchURL, storeName, guessStore, fmtEUR } from './stores.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -258,8 +259,9 @@ async function renderFicha() {
 
 // ---------- plano
 const TOOLS = [
-  ['select', '☝', 'Mover'], ['wall', '▬', 'Pared'], ['door', '◜', 'Puerta'], ['window', '▭', 'Ventana'], ['sliding', '⇆', 'Corredera'], ['entry', '⇩', 'Entrada'],
-  ['item', '▦', 'Muebles'], ['ink', '✎', 'Lápiz'], ['text', 'T', 'Texto'], ['erase', '⌫', 'Borrar'],
+  ['select', '☝', 'Mover'], ['room', '⬚', 'Habitación'], ['wall', '▬', 'Pared'], ['door', '◜', 'Puerta'], ['window', '▭', 'Ventana'], ['sliding', '⇆', 'Corredera'], ['entry', '⇩', 'Entrada'],
+  ['item', '▦', 'Muebles'], '|',
+  ['ink', '✎', 'Lápiz'], ['line', '╱', 'Línea'], ['arrow', '➚', 'Flecha'], ['rect', '▢', 'Zona'], ['circle', '◯', 'Círculo'], ['dim', '↔', 'Cota'], ['measure', '📏', 'Medir'], ['text', 'T', 'Texto'], ['erase', '⌫', 'Borrar'],
 ];
 const HINTS = {
   select: 'Toca un elemento para editarlo o arrástralo. Arrastra el fondo para moverte; pellizca para hacer zoom.',
@@ -269,6 +271,10 @@ const HINTS = {
   item: 'Elige una pieza a la derecha y toca el plano donde quieras colocarla.',
   ink: 'Escribe o dibuja a mano: notas, flechas, ideas. Con Apple Pencil, el dedo sirve para moverte por el plano.',
   text: 'Toca el plano donde quieras añadir una nota escrita.', erase: 'Toca o pasa por encima de lo que quieras borrar.',
+  room: 'Arrastra de una esquina a la contraria para crear una habitación rectangular con sus 4 paredes.',
+  line: 'Arrastra para dibujar una línea recta (se ajusta a 0°, 45° y 90°).', arrow: 'Arrastra para dibujar una flecha que señale algo.',
+  rect: 'Arrastra para marcar una zona rectangular (por ejemplo, "zona de lectura").', circle: 'Arrastra desde el centro hacia fuera para dibujar un círculo.',
+  dim: 'Arrastra entre dos puntos para poner una cota con su medida.', measure: 'Arrastra para medir una distancia (no se guarda en el plano).',
 };
 
 function renderPlano() {
@@ -276,8 +282,9 @@ function renderPlano() {
   if (!p.plan) { p.plan = emptyPlan(p.width || 500, p.length || 700); save(); }
   view.innerHTML = `<div class="editor">
     <div class="toolbar" id="toolbar">
-      ${TOOLS.map(([k, ic, l]) => `<button class="tool ${k === 'select' ? 'active' : ''}" data-tool="${k}"><span class="ic">${ic}</span>${l}</button>`).join('')}
+      ${TOOLS.map((t) => t === '|' ? '<hr>' : `<button class="tool ${t[0] === 'select' ? 'active' : ''}" data-tool="${t[0]}"><span class="ic">${t[1]}</span>${t[2]}</button>`).join('')}
       <hr>
+      <button class="tool active" data-act="snap" id="snap-btn"><span class="ic">🧲</span>Imán</button>
       <button class="tool" data-act="undo"><span class="ic">↶</span>Deshacer</button>
       <button class="tool" data-act="redo"><span class="ic">↷</span>Rehacer</button>
       <button class="tool" data-act="fit"><span class="ic">⤢</span>Encuadrar</button>
@@ -305,6 +312,7 @@ function renderPlano() {
     if (b.dataset.act === 'undo') editor.undo();
     if (b.dataset.act === 'redo') editor.redo();
     if (b.dataset.act === 'fit') editor.fit();
+    if (b.dataset.act === 'snap') { editor.snapOn = !editor.snapOn; b.classList.toggle('active', editor.snapOn); toast(editor.snapOn ? 'Imán activado: ajusta a 5 cm y a paredes' : 'Imán desactivado: movimiento libre (1 cm)'); }
   };
   $('#level').onchange = (e) => { editor.level = e.target.value; editor.render(); };
   $('#png').onclick = async () => download(await planPNG(p.plan, { title: p.name, subtitle: `${ROOM_TYPES[p.roomType]} · ${fmtM(p.width)} × ${fmtM(p.length)} m` }), `plano-${slug(p.name)}.png`);
@@ -330,9 +338,9 @@ function renderSide() {
     side.onclick = (e) => { const b = e.target.closest('[data-type]'); if (!b) return; editor.itemType = b.dataset.type; editor.setTool('item', b.dataset.type); $$('.catalog button', side).forEach((x) => x.classList.toggle('on', x === b)); $('#hint').textContent = 'Ahora toca el plano donde quieras colocarla.'; };
     return;
   }
-  if (editor.tool === 'ink') {
+  if (['ink', 'line', 'arrow', 'rect', 'circle'].includes(editor.tool)) {
     const cols = ['#C0392B', '#185FA5', '#1f1f1d', '#0F6E56'];
-    side.innerHTML = `<h3>Lápiz</h3><p class="muted small">Escribe indicaciones a mano: en el modo automático la IA las lee; en el manual van dibujadas en el plano que compartes.</p>
+    side.innerHTML = `<h3>${{ ink: 'Lápiz', line: 'Línea', arrow: 'Flecha', rect: 'Zona', circle: 'Círculo' }[editor.tool]}</h3><p class="muted small">Las anotaciones salen en el plano que se envía a la IA y en el que compartes. Elige el color:</p>
       <div class="swatches">${cols.map((c) => `<button class="swatch ${c === editor.inkColor ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="Color"></button>`).join('')}</div>`;
     side.onclick = (e) => { const b = e.target.closest('[data-c]'); if (!b) return; editor.inkColor = b.dataset.c; $$('.swatch', side).forEach((x) => x.classList.toggle('on', x === b)); };
     return;
@@ -370,6 +378,53 @@ function renderSide() {
   };
 }
 
+// ---------- producto real vinculado a una pieza del plano
+async function renderProductBox(box, o) {
+  const pr = o.product;
+  const q = `${o.label} ${o.w}x${o.d}`;
+  if (pr && !box.dataset.editing) {
+    const img = pr.fileId ? await db.fileURL(pr.fileId) : '';
+    box.innerHTML = `<h3>Producto real</h3>
+      <div class="product-card">${img ? `<img src="${img}" alt="">` : '<div class="noimg">Sin foto</div>'}
+        <div><b>${esc(pr.name || 'Producto')}</b><span class="muted small">${esc(storeName(pr.store))}${pr.price ? ' · ' + fmtEUR(pr.price) : ''}</span>
+        ${pr.url ? `<a class="small" href="${esc(pr.url)}" target="_blank" rel="noopener">Ver en la tienda ↗</a>` : ''}</div></div>
+      <p class="muted small">Su foto se envía como referencia al generar los renders y sale en la presentación con el precio.</p>
+      <div class="row"><button class="btn" id="p-edit">Editar</button><button class="btn danger" id="p-rm">Quitar producto</button></div>`;
+    $('#p-edit', box).onclick = () => { box.dataset.editing = '1'; renderProductBox(box, o); };
+    $('#p-rm', box).onclick = () => editor.update(() => { delete o.product; });
+    return;
+  }
+  const v = pr || {};
+  box.innerHTML = `<h3>Producto real</h3>
+    <p class="muted small">Busca el mueble en una tienda, copia el enlace y una foto, y vincúlalo a esta pieza.</p>
+    <div class="stores">${STORES.map((st) => `<a class="chip small" href="${esc(storeSearchURL(st, q))}" target="_blank" rel="noopener">${esc(st.name)}</a>`).join('')}</div>
+    <div class="field"><label>Enlace del producto</label><input id="p-url" value="${esc(v.url || '')}" placeholder="https://…"></div>
+    <div class="field"><label>Nombre / modelo</label><input id="p-name" value="${esc(v.name || '')}" placeholder="Ej.: Sofá KIVIK 3 plazas gris"></div>
+    <div class="row"><div class="field" style="flex:1"><label>Tienda</label><select id="p-store"><option value="">—</option>${STORES.map((st) => `<option value="${st.id}" ${v.store === st.id ? 'selected' : ''}>${esc(st.name)}</option>`).join('')}<option value="otra" ${v.store === 'otra' ? 'selected' : ''}>Otra</option></select></div>
+      <div class="field" style="flex:1"><label>Precio (€)</label><input id="p-price" type="number" inputmode="decimal" value="${v.price || ''}"></div></div>
+    <div class="row" style="margin-bottom:10px"><button class="btn" id="p-photo">Subir foto</button><button class="btn" id="p-paste">Pegar imagen</button><span class="muted small" id="p-photo-st">${v.fileId ? 'Foto añadida ✓' : ''}</span></div>
+    <div class="row"><button class="btn primary" id="p-save">Vincular producto</button>${pr ? '<button class="btn" id="p-cancel">Cancelar</button>' : ''}</div>`;
+  let fileId = v.fileId || '';
+  $('#p-url', box).onchange = (e) => { const g = guessStore(e.target.value); if (g) $('#p-store', box).value = g; };
+  const setPhoto = async (blob) => { fileId = await db.putFile(blob); $('#p-photo-st', box).textContent = 'Foto añadida ✓'; };
+  $('#p-photo', box).onclick = async () => { const [f] = await pickFiles('image/*', false); if (f) setPhoto(f); };
+  $('#p-paste', box).onclick = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const it of items) { const t = it.types.find((x) => x.startsWith('image/')); if (t) { await setPhoto(await it.getType(t)); return; } }
+      toast('No hay ninguna imagen copiada. En la web de la tienda: clic derecho en la foto → Copiar imagen.', 5000);
+    } catch { toast('Tu navegador no deja pegar imágenes aquí: usa "Subir foto".', 5000); }
+  };
+  const c = $('#p-cancel', box); if (c) c.onclick = () => { delete box.dataset.editing; renderProductBox(box, o); };
+  $('#p-save', box).onclick = () => {
+    const name = $('#p-name', box).value.trim(), url = $('#p-url', box).value.trim();
+    if (!name && !url && !fileId) return toast('Pon al menos el nombre, el enlace o una foto del producto');
+    delete box.dataset.editing;
+    editor.update(() => { o.product = { name, url, store: $('#p-store', box).value, price: Number($('#p-price', box).value) || 0, fileId }; });
+    toast('Producto vinculado');
+  };
+}
+
 function renderInspector(side, sel) {
   const o = sel.obj;
   if (sel.kind === 'item') {
@@ -378,31 +433,56 @@ function renderInspector(side, sel) {
       <div class="row"><div class="field" style="flex:1"><label>Ancho (cm)</label><input id="i-w" type="number" value="${o.w}"></div>
       <div class="field" style="flex:1"><label>Fondo (cm)</label><input id="i-d" type="number" value="${o.d}"></div></div>
       <div class="field"><label>Nivel</label><select id="i-level"><option value="baja" ${o.level !== 'alta' ? 'selected' : ''}>Planta baja</option><option value="alta" ${o.level === 'alta' ? 'selected' : ''}>Altillo (nivel alto)</option></select></div>
-      <div class="row"><button class="btn" id="i-rot">Girar 90°</button><button class="btn" id="i-dup">Duplicar</button><button class="btn danger" id="i-del">Borrar</button></div></div>`;
+      <div class="field"><label>Giro: <b id="i-rotv">${o.rot || 0}°</b></label><input id="i-rotr" type="range" min="0" max="345" step="15" value="${o.rot || 0}"></div>
+      <div class="row"><button class="btn" id="i-rot">Girar 90°</button><button class="btn" id="i-dup">Duplicar</button><button class="btn danger" id="i-del">Borrar</button></div>
+      <div id="i-product" class="product-box"></div></div>`;
+    renderProductBox($('#i-product'), o);
     $('#i-label').onchange = (e) => editor.update(() => { o.label = e.target.value; });
     $('#i-w').onchange = (e) => editor.update(() => { o.w = Math.max(5, Number(e.target.value) || o.w); });
     $('#i-d').onchange = (e) => editor.update(() => { o.d = Math.max(5, Number(e.target.value) || o.d); });
     $('#i-level').onchange = (e) => editor.update(() => { o.level = e.target.value; });
     $('#i-rot').onclick = () => editor.update(() => { o.rot = ((o.rot || 0) + 90) % 360; });
-    $('#i-dup').onclick = () => { const c = { ...o, id: db.uid(), x: o.x + 20, y: o.y + 20 }; editor.update((pl) => pl.items.push(c)); editor.select(c.id); };
+    $('#i-rotr').oninput = (e) => { $('#i-rotv').textContent = e.target.value + '°'; o.rot = Number(e.target.value); editor.render(); };
+    $('#i-rotr').onchange = (e) => editor.update(() => { o.rot = Number(e.target.value); });
+    $('#i-dup').onclick = () => editor.duplicateSelected();
     $('#i-del').onclick = () => editor.removeSelected();
   } else if (sel.kind === 'wall') {
     const len = Math.round(Math.hypot(o.x2 - o.x1, o.y2 - o.y1));
     side.innerHTML = `<div class="inspector"><h3>Pared</h3>
       <div class="field"><label>Longitud (cm)</label><input id="w-len" type="number" value="${len}"></div>
+      <div class="field"><label>Tipo</label><select id="w-t">${[[8, 'Tabique fino (8 cm)'], [12, 'Tabique (12 cm)'], [20, 'Muro (20 cm)'], [30, 'Muro de carga (30 cm)']].map(([v, l]) => `<option value="${v}" ${(o.t || 12) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <p class="muted small">Arrastra la pared para moverla en paralelo; las paredes unidas se ajustan.</p>
       <button class="btn danger" id="w-del">Borrar pared</button></div>`;
     $('#w-len').onchange = (e) => editor.setWallLength(o, Number(e.target.value));
+    $('#w-t').onchange = (e) => editor.update(() => { o.t = Number(e.target.value); });
     $('#w-del').onclick = () => editor.removeSelected();
   } else if (sel.kind === 'opening') {
     side.innerHTML = `<div class="inspector"><h3>Hueco</h3>
       <div class="field"><label>Tipo</label><select id="o-type">${[['puerta', 'Puerta'], ['corredera', 'Puerta corredera'], ['ventana', 'Ventana'], ['entrada', 'Entrada']].map(([k, v]) => `<option value="${k}" ${o.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div class="field"><label>Ancho (cm)</label><input id="o-w" type="number" value="${o.w}"></div>
       <p class="muted small">Arrástralo para moverlo a lo largo de la pared.</p>
+      ${o.type === 'puerta' || o.type === 'corredera' || o.type === 'entrada' ? '<div class="row" style="margin-bottom:10px"><button class="btn" id="o-flip">Cambiar bisagra</button><button class="btn" id="o-out">Abrir hacia el otro lado</button></div>' : ''}
       <button class="btn danger" id="o-del">Borrar</button></div>`;
     $('#o-type').onchange = (e) => editor.update(() => { o.type = e.target.value; });
     $('#o-w').onchange = (e) => editor.update(() => { o.w = Math.max(30, Number(e.target.value) || o.w); });
     $('#o-del').onclick = () => editor.removeSelected();
+    const fl = $('#o-flip'); if (fl) fl.onclick = () => editor.update(() => { o.flip = !o.flip; });
+    const ou = $('#o-out'); if (ou) ou.onclick = () => editor.update(() => { o.out = !o.out; });
+  } else if (o.kind && o.kind !== 'ink' && o.kind !== 'text') {
+    const names = { line: 'Línea', arrow: 'Flecha', dim: 'Cota', rect: 'Zona', circle: 'Círculo' };
+    const cols = ['#C0392B', '#185FA5', '#1f1f1d', '#0F6E56', '#444441'];
+    const len = 'x1' in o ? Math.round(Math.hypot(o.x2 - o.x1, o.y2 - o.y1)) : o.kind === 'rect' ? `${o.w} × ${o.h}` : `Ø ${o.r * 2}`;
+    side.innerHTML = `<div class="inspector"><h3>${names[o.kind]}</h3>
+      <p class="small">Medida: <b>${len} cm</b></p>
+      <div class="swatches" style="margin-bottom:12px">${cols.map((c) => `<button class="swatch ${c === o.color ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="Color"></button>`).join('')}</div>
+      <label class="small" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="s-dash" ${o.dash ? 'checked' : ''}> Línea discontinua</label>
+      ${o.kind === 'rect' || o.kind === 'circle' ? `<label class="small" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="s-fill" ${o.fill ? 'checked' : ''}> Relleno suave</label>` : ''}
+      <div class="row"><button class="btn" id="s-dup">Duplicar</button><button class="btn danger" id="s-del">Borrar</button></div></div>`;
+    side.querySelector('.swatches').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) editor.update(() => { o.color = b.dataset.c; }); };
+    $('#s-dash').onchange = (e) => editor.update(() => { o.dash = e.target.checked; });
+    const sf = $('#s-fill'); if (sf) sf.onchange = (e) => editor.update(() => { o.fill = e.target.checked; });
+    $('#s-dup').onclick = () => editor.duplicateSelected();
+    $('#s-del').onclick = () => editor.removeSelected();
   } else {
     side.innerHTML = `<div class="inspector"><h3>Nota</h3>
       ${o.kind === 'text' ? `<div class="field"><label>Texto</label><textarea id="n-text">${esc(o.text)}</textarea></div>` : '<p class="muted small">Nota a mano. Arrástrala para moverla.</p>'}
@@ -446,7 +526,7 @@ async function renderRenders() {
           ${rstate.view === 'libre' ? `<div class="field full"><label>Describe la vista</label><input id="r-custom" value="${esc(rstate.customView)}" placeholder="Ej.: desde el altillo mirando hacia el salón"></div>` : ''}
           <div class="field full"><label><input type="checkbox" id="r-photo" ${rstate.photo ? 'checked' : ''} ${p.photos.length ? '' : 'disabled'}> Usar la foto principal como base ${p.photos.length ? '' : '(no hay fotos en la ficha)'}</label></div>
         </div>
-        <p class="muted small">Imágenes que acompañan al prompt, en este orden: ${[hasPhoto && 'foto principal', 'plano', rstate.styleRef && 'render de referencia'].filter(Boolean).join(' → ')}.</p>
+        <p class="muted small">Imágenes que acompañan al prompt, en este orden: ${[hasPhoto && 'foto principal', 'plano', rstate.styleRef && 'render de referencia', ...productRefs(p).withPhoto.map((it) => 'foto de ' + it.label.toLowerCase())].filter(Boolean).join(' → ')}.</p>
         <textarea class="prompt-box" id="r-prompt">${esc(prompt)}</textarea>
         <div class="row" style="margin-top:12px">
           ${auto ? '<button class="btn primary" id="r-gen">Generar render</button>' : `
@@ -482,9 +562,11 @@ async function renderRenders() {
     if (hasPhoto) files.push(await db.getFile(p.photos[0]));
     files.push(await planPNG(p.plan, { title: p.name, subtitle: `${fmtM(p.width)} × ${fmtM(p.length)} m · arriba: fondo · abajo: entrada` }));
     if (rstate.styleRef) files.push(await db.getFile(p.renders.find((r) => r.id === rstate.styleRef).fileId));
+    for (const it of productRefs(p).withPhoto) { const b = await db.getFile(it.product.fileId); if (b) files.push(b); }
     return files;
   };
-  const asFiles = (blobs) => blobs.map((b, i) => new File([b], `${i + 1}-${['foto', 'plano', 'referencia'][hasPhoto ? i : i + 1] || 'imagen'}.${b.type.includes('png') ? 'png' : 'jpg'}`, { type: b.type || 'image/jpeg' }));
+  const names = [hasPhoto && 'foto', 'plano', rstate.styleRef && 'referencia', ...productRefs(p).withPhoto.map((it) => slug(it.label))].filter(Boolean);
+  const asFiles = (blobs) => blobs.map((b, i) => new File([b], `${i + 1}-${names[i] || 'imagen'}.${(b.type || '').includes('png') ? 'png' : 'jpg'}`, { type: b.type || 'image/jpeg' }));
 
   if (!auto) {
     $('#r-copy').onclick = () => copy($('#r-prompt').value);
@@ -582,6 +664,7 @@ async function renderVideo() {
       <div class="row" style="margin-top:14px"><button class="btn" id="v-preview">Vista previa</button><button class="btn primary" id="v-make" ${p.renders.length ? '' : 'disabled'}>Crear vídeo</button></div>
       <div class="progress" style="margin-top:12px"><div id="v-prog"></div></div>
       <div class="row" id="v-out" style="margin-top:12px"></div>
+      ${shoppingListHTML(p)}
       <h3>Presentación para el cliente</h3>
       <p class="muted small">Un único archivo con los renders elegidos, el plano y los datos del proyecto. Se abre en cualquier móvil sin instalar nada: envíalo por WhatsApp o email.</p>
       <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="p-video" ${vstate.withVideo ? 'checked' : ''} ${vstate.lastVideo ? '' : 'disabled'}> Incluir el vídeo ${vstate.lastVideo ? `(${(vstate.lastVideo.size / 1e6).toFixed(1)} MB)` : '(crea primero el vídeo)'}</label>
@@ -609,6 +692,12 @@ async function renderVideo() {
   $('#v-move').onchange = (e) => { vstate.move = e.target.value; $('#v-prompt').value = videoPrompt(vstate.move); };
   $('#v-copy').onclick = () => copy($('#v-prompt').value);
   $('#p-video').onchange = (e) => (vstate.withVideo = e.target.checked);
+  fillShoppingThumbs(p);
+  const csv = $('#shop-csv'); if (csv) csv.onclick = () => {
+    const rows = [['Pieza', 'Producto', 'Tienda', 'Precio (€)', 'Enlace'], ...productItems(p).map((it) => [it.label, it.product.name, storeName(it.product.store), String(it.product.price || '').replace('.', ','), it.product.url])];
+    const text = '\ufeff' + rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    download(new Blob([text], { type: 'text/csv' }), `${slug(p.name)}-lista-de-compra.csv`);
+  };
   $('#p-make').onclick = async (e) => {
     if (!vstate.picked.length) return toast('Elige al menos un render');
     const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner"></span> Preparando…';
@@ -620,6 +709,7 @@ async function renderVideo() {
         size: `${fmtM(p.width)} × ${fmtM(p.length)} m${p.width && p.length ? ` (${Math.round(p.width * p.length / 1e4)} m²)` : ''}`,
         planBlob: vstate.plan && p.plan ? await planPNG(p.plan, { title: p.name, subtitle: `${fmtM(p.width)} × ${fmtM(p.length)} m` }) : null,
         videoBlob: vstate.withVideo ? vstate.lastVideo : null,
+        products: await Promise.all(productItems(p).map(async (it) => ({ label: it.label, ...it.product, storeLabel: storeName(it.product.store), blob: it.product.fileId ? await db.getFile(it.product.fileId) : null }))),
       });
       const file = new File([html], `${slug(p.name)}-propuesta.html`, { type: 'text/html' });
       if (!(await shareFiles([file], p.name))) download(file, file.name);
@@ -665,6 +755,20 @@ async function renderVideo() {
     } catch (err) { toast('No se pudo grabar el vídeo: ' + err.message, 6000); }
     b.disabled = false; b.textContent = 'Crear vídeo';
   };
+}
+
+// ---------- lista de compra (productos reales vinculados en el plano)
+const productItems = (p) => (p.plan?.items || []).filter((it) => it.product);
+function shoppingListHTML(p) {
+  const items = productItems(p);
+  if (!items.length) return '<h3>Lista de compra</h3><p class="muted small">Vincula productos reales a los muebles en el plano (selecciona una pieza → "Producto real") y aquí verás la lista con el total.</p>';
+  const total = items.reduce((a, it) => a + (Number(it.product.price) || 0), 0);
+  return `<h3>Lista de compra</h3><table class="shop-list"><tbody>${items.map((it) => `<tr><td><img data-thumb="${it.product.fileId || ''}" alt=""></td><td><b>${esc(it.product.name || it.label)}</b><br><span class="muted small">${esc(it.label)} · ${esc(storeName(it.product.store))}</span></td><td class="num">${it.product.price ? fmtEUR(it.product.price) : '—'}</td><td>${it.product.url ? `<a href="${esc(it.product.url)}" target="_blank" rel="noopener">↗</a>` : ''}</td></tr>`).join('')}
+    <tr><td></td><td><b>Total</b></td><td class="num"><b>${fmtEUR(total)}</b></td><td></td></tr></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="btn" id="shop-csv">Descargar lista (Excel/CSV)</button></div>`;
+}
+async function fillShoppingThumbs() {
+  for (const img of $$('img[data-thumb]')) { if (img.dataset.thumb) img.src = await db.fileURL(img.dataset.thumb); else img.remove(); }
 }
 
 // ---------- ajustes
@@ -743,7 +847,7 @@ function openSettings() {
 // ---------- exportar / importar proyecto (con imágenes)
 async function exportProject() {
   const p = current;
-  const ids = [...p.photos, ...p.renders.map((r) => r.fileId)];
+  const ids = [...p.photos, ...p.renders.map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean)];
   const files = {};
   for (const id of ids) {
     const b = await db.getFile(id); if (!b) continue;
@@ -766,6 +870,7 @@ async function importProject() {
     p.id = db.uid();
     p.photos = p.photos.map((id) => map[id]).filter(Boolean);
     p.renders = p.renders.map((r) => ({ ...r, fileId: map[r.fileId] })).filter((r) => r.fileId);
+    (p.plan?.items || []).forEach((it) => { if (it.product?.fileId) it.product.fileId = map[it.product.fileId] || ''; });
     await db.saveProject(p);
     toast('Proyecto importado'); renderHome();
   } catch (e) { toast('No se pudo importar: ' + e.message, 5000); }

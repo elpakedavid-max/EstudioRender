@@ -150,3 +150,15 @@ a.btn.dark, a.btn.primary { color: #fff; }
 .status.finalizado { background: #e1f5ee; color: #0f6e56; }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 @media (max-width: 760px) { .save-state { display: none; } }
+
+.product-box { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.stores { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.stores .chip { min-height: 32px; padding: 5px 10px; font-size: 12.5px; text-decoration: none; color: inherit; }
+.product-card { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+.product-card img, .product-card .noimg { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; background: #eee; flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); }
+.product-card b { display: block; }
+.product-card span, .product-card a { display: block; margin-top: 2px; }
+.shop-list { width: 100%; border-collapse: collapse; font-size: 14px; }
+.shop-list td, .shop-list th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.shop-list img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; display: block; }
+.shop-list .num { text-align: right; white-space: nowrap; }

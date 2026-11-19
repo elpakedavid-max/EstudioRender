@@ -65,7 +65,7 @@ async function api(path, { method = 'GET', body, headers = {}, raw = false } = {
   return txt ? JSON.parse(txt) : null;
 }
 
-const fileIds = (p) => [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId)];
+const fileIds = (p) => [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean)];
 
 async function uploadFiles(p, uploaded) {
   const uid = session().uid;

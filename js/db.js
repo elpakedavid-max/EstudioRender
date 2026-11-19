@@ -52,7 +52,7 @@ export async function saveProject(p) {
 }
 
 export async function deleteProject(p) {
-  const ids = [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId)].map((x) => (typeof x === 'string' ? x : x.fileId));
+  const ids = [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean)];
   await tx('files', 'readwrite', (s) => Promise.all(ids.map((id) => req2p(s.delete(id)))));
   await tx('projects', 'readwrite', (s) => req2p(s.delete(p.id)));
 }

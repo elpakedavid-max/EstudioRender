@@ -8,8 +8,12 @@ App (PWA) para arquitectos e interioristas: de las fotos y las medidas de una ha
 2. **Plano** (vista desde arriba, a escala en cm):
    - Paredes a mano alzada que se enderezan solas, con la medida y unidas entre sí.
    - Puertas, ventanas, correderas y entrada sobre las paredes.
-   - Biblioteca de muebles por estancia (baño, cocina, dormitorio, salón, altillo, escaleras…), para mover, girar, redimensionar y marcar si van en planta baja o en el altillo.
-   - Lápiz para notas y dibujos a mano (con Apple Pencil, el dedo sirve para moverse y hacer zoom) y notas de texto.
+   - Biblioteca de más de 70 piezas con medidas reales (baño, cocina, dormitorio, salón, exterior, estructura), para mover, girar, redimensionar y marcar si van en planta baja o en el altillo.
+   - **Productos reales**: cada pieza se puede vincular a un producto de IKEA, Leroy Merlin, Kave Home, Maisons du Monde, Zara Home, El Corte Inglés, Conforama, Sklum, Bauhaus, Roca, Porcelanosa, Amazon o Google Shopping, con enlace, precio y foto. La foto se usa como referencia en los renders, y los productos salen en la lista de compra (descargable en CSV) y en la presentación con el total.
+   - Habitación rectangular de un solo trazo, grosor de muros (tabique, muro, muro de carga), puertas con bisagra y sentido de apertura invertibles.
+   - Herramientas de dibujo: lápiz, línea, flecha, zona, círculo, cota con medida, medir distancias y notas de texto, con colores, discontinuas y relleno.
+   - Imán activable (ajuste a 5 cm y a paredes), giro libre de muebles de 15° en 15°, duplicar, y atajos de teclado (Ctrl+Z/Y, Supr, Ctrl+D, flechas, Esc).
+   - Con Apple Pencil, el dedo sirve para moverse y hacer zoom.
    - Deshacer y rehacer, y descarga del plano en PNG.
 3. **Renders**, con dos modos que se eligen en Ajustes:
    - **Manual (sin coste)**: genera el prompt a partir de la ficha y del plano, y comparte la foto y el plano con Gemini o ChatGPT. El resultado se sube a la galería.

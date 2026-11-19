@@ -67,7 +67,7 @@ export function planMarkup(plan, { selectedId = null, showHits = false, level = 
     const alto = it.level === 'alta' ? ' alto' : '';
     const fs = Math.max(9, Math.min(18, Math.min(it.w, it.d) / 4));
     const rot = it.rot || 0;
-    const counter = rot === 90 || rot === 270 ? `rotate(${-rot} ${r1(it.w / 2)} ${r1(it.d / 2)})` : rot === 180 ? `rotate(180 ${r1(it.w / 2)} ${r1(it.d / 2)})` : '';
+    const counter = rot ? `rotate(${-rot} ${r1(it.w / 2)} ${r1(it.d / 2)})` : '';
     out.push(`<g class="item${sel}${alto} t-${it.type}" data-id="${it.id}" data-kind="item" transform="translate(${r1(it.x)} ${r1(it.y)}) rotate(${rot} ${r1(it.w / 2)} ${r1(it.d / 2)})">
       <rect width="${r1(it.w)}" height="${r1(it.d)}" rx="3" fill="${fill}" stroke="${stroke}" class="body"/>
       <g stroke="${stroke}">${symbol(it.type, it.w, it.d)}</g>
@@ -78,7 +78,7 @@ export function planMarkup(plan, { selectedId = null, showHits = false, level = 
   // Muros
   for (const w of plan.walls) {
     const sel = w.id === selectedId ? ' selected' : '';
-    out.push(`<line class="wall${sel}" data-id="${w.id}" data-kind="wall" x1="${r1(w.x1)}" y1="${r1(w.y1)}" x2="${r1(w.x2)}" y2="${r1(w.y2)}"/>`);
+    out.push(`<line class="wall${sel}" data-id="${w.id}" data-kind="wall" x1="${r1(w.x1)}" y1="${r1(w.y1)}" x2="${r1(w.x2)}" y2="${r1(w.y2)}" style="stroke-width:${w.t || 12}"/>`);
     if (showHits) out.push(`<line class="hit" data-id="${w.id}" data-kind="wall" x1="${r1(w.x1)}" y1="${r1(w.y1)}" x2="${r1(w.x2)}" y2="${r1(w.y2)}"/>`);
   }
 
@@ -89,12 +89,14 @@ export function planMarkup(plan, { selectedId = null, showHits = false, level = 
     const L = wallLen(w); if (!L) continue;
     const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
     const cx = w.x1 + ux * L * o.t, cy = w.y1 + uy * L * o.t;
-    const ax = cx - ux * o.w / 2, ay = cy - uy * o.w / 2, bx = cx + ux * o.w / 2, by = cy + uy * o.w / 2;
+    let ax = cx - ux * o.w / 2, ay = cy - uy * o.w / 2, bx = cx + ux * o.w / 2, by = cy + uy * o.w / 2;
+    if (o.flip) { [ax, bx] = [bx, ax]; [ay, by] = [by, ay]; }
     const sel = o.id === selectedId ? ' selected' : '';
     // Normal hacia el interior (aprox. hacia el centro de los límites)
     let nx = -uy, ny = ux;
     const mid = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
     if ((mid.x - cx) * nx + (mid.y - cy) * ny < 0) { nx = -nx; ny = -ny; }
+    if (o.out) { nx = -nx; ny = -ny; }
     let g = `<line class="gap" x1="${r1(ax)}" y1="${r1(ay)}" x2="${r1(bx)}" y2="${r1(by)}"/>`;
     if (o.type === 'ventana') {
       g += `<line class="win" x1="${r1(ax - nx * 4)}" y1="${r1(ay - ny * 4)}" x2="${r1(bx - nx * 4)}" y2="${r1(by - ny * 4)}"/><line class="win" x1="${r1(ax + nx * 4)}" y1="${r1(ay + ny * 4)}" x2="${r1(bx + nx * 4)}" y2="${r1(by + ny * 4)}"/>`;
@@ -102,7 +104,7 @@ export function planMarkup(plan, { selectedId = null, showHits = false, level = 
       g += `<line class="door" x1="${r1(ax + nx * 6)}" y1="${r1(ay + ny * 6)}" x2="${r1(cx + ux * o.w * 0.1 + nx * 6)}" y2="${r1(cy + uy * o.w * 0.1 + ny * 6)}"/><line class="door thin" x1="${r1(cx - ux * o.w * 0.1 + nx * 12)}" y1="${r1(cy - uy * o.w * 0.1 + ny * 12)}" x2="${r1(bx + nx * 12)}" y2="${r1(by + ny * 12)}"/>`;
     } else if (o.type === 'puerta') {
       const ex = ax + nx * o.w, ey = ay + ny * o.w;
-      g += `<line class="door" x1="${r1(ax)}" y1="${r1(ay)}" x2="${r1(ex)}" y2="${r1(ey)}"/><path class="swing" d="M ${r1(ex)} ${r1(ey)} A ${o.w} ${o.w} 0 0 ${ux * ny - uy * nx > 0 ? 1 : 0} ${r1(bx)} ${r1(by)}"/>`;
+      g += `<line class="door" x1="${r1(ax)}" y1="${r1(ay)}" x2="${r1(ex)}" y2="${r1(ey)}"/><path class="swing" d="M ${r1(ex)} ${r1(ey)} A ${o.w} ${o.w} 0 0 ${(bx - ax) * ny - (by - ay) * nx > 0 ? 1 : 0} ${r1(bx)} ${r1(by)}"/>`;
     } else if (o.type === 'entrada') {
       g += `<line class="door" x1="${r1(ax)}" y1="${r1(ay)}" x2="${r1(ax + nx * o.w * 0.9)}" y2="${r1(ay + ny * o.w * 0.9)}"/><text class="openlabel" x="${r1(cx - nx * 28)}" y="${r1(cy - ny * 28)}" text-anchor="middle" dominant-baseline="central">Entrada</text>`;
     }
@@ -129,6 +131,28 @@ export function planMarkup(plan, { selectedId = null, showHits = false, level = 
     if (n.kind === 'ink') {
       const d = n.points.map((p, i) => `${i ? 'L' : 'M'}${r1(p[0])} ${r1(p[1])}`).join(' ');
       out.push(`<path class="ink${sel}" data-id="${n.id}" data-kind="note" d="${d}" stroke="${n.color || '#C0392B'}" stroke-width="${n.width || 3}"/>`);
+    } else if (n.kind === 'line' || n.kind === 'arrow' || n.kind === 'dim') {
+      const c = n.color || (n.kind === 'dim' ? '#444441' : '#C0392B');
+      const L = Math.hypot(n.x2 - n.x1, n.y2 - n.y1) || 1;
+      const ux = (n.x2 - n.x1) / L, uy = (n.y2 - n.y1) / L, px = -uy, py = ux;
+      let g = `<line x1="${r1(n.x1)}" y1="${r1(n.y1)}" x2="${r1(n.x2)}" y2="${r1(n.y2)}" stroke="${c}" stroke-width="${n.kind === 'dim' ? 1.5 : 3}" ${n.dash ? 'stroke-dasharray="10 7"' : ''}/>`;
+      const head = (x, y, dx, dy, s) => `<path d="M ${r1(x - dx * s + dy * s * 0.5)} ${r1(y - dy * s - dx * s * 0.5)} L ${r1(x)} ${r1(y)} L ${r1(x - dx * s - dy * s * 0.5)} ${r1(y - dy * s + dx * s * 0.5)}" fill="none" stroke="${c}" stroke-width="${n.kind === 'dim' ? 1.5 : 3}"/>`;
+      if (n.kind === 'arrow') g += head(n.x2, n.y2, ux, uy, 16);
+      if (n.kind === 'dim') {
+        g += head(n.x2, n.y2, ux, uy, 9) + head(n.x1, n.y1, -ux, -uy, 9);
+        g += `<line x1="${r1(n.x1 - px * 10)}" y1="${r1(n.y1 - py * 10)}" x2="${r1(n.x1 + px * 10)}" y2="${r1(n.y1 + py * 10)}" stroke="${c}" stroke-width="1"/><line x1="${r1(n.x2 - px * 10)}" y1="${r1(n.y2 - py * 10)}" x2="${r1(n.x2 + px * 10)}" y2="${r1(n.y2 + py * 10)}" stroke="${c}" stroke-width="1"/>`;
+        let ang = Math.atan2(uy, ux) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
+        const tx = (n.x1 + n.x2) / 2 + px * 14 * (py > 0 ? -1 : 1), ty = (n.y1 + n.y2) / 2 + py * 14 * (py > 0 ? -1 : 1);
+        g += `<text x="${r1(tx)}" y="${r1(ty)}" font-size="15" fill="${c}" text-anchor="middle" dominant-baseline="central" transform="rotate(${r1(ang)} ${r1(tx)} ${r1(ty)})">${fmtM(L)}</text>`;
+      }
+      g += `<line class="hit" x1="${r1(n.x1)}" y1="${r1(n.y1)}" x2="${r1(n.x2)}" y2="${r1(n.y2)}"/>`;
+      out.push(`<g class="shape${sel}" data-id="${n.id}" data-kind="note">${g}</g>`);
+    } else if (n.kind === 'rect') {
+      const c = n.color || '#185FA5';
+      out.push(`<g class="shape${sel}" data-id="${n.id}" data-kind="note"><rect x="${r1(n.x)}" y="${r1(n.y)}" width="${r1(n.w)}" height="${r1(n.h)}" fill="${c}" fill-opacity="${n.fill ? 0.18 : 0}" stroke="${c}" stroke-width="2.5" ${n.dash ? 'stroke-dasharray="10 7"' : ''} rx="2"/></g>`);
+    } else if (n.kind === 'circle') {
+      const c = n.color || '#185FA5';
+      out.push(`<g class="shape${sel}" data-id="${n.id}" data-kind="note"><circle cx="${r1(n.cx)}" cy="${r1(n.cy)}" r="${r1(n.r)}" fill="${c}" fill-opacity="${n.fill ? 0.18 : 0}" stroke="${c}" stroke-width="2.5" ${n.dash ? 'stroke-dasharray="10 7"' : ''}/></g>`);
     } else {
       out.push(`<g class="textnote${sel}" data-id="${n.id}" data-kind="note"><text x="${r1(n.x)}" y="${r1(n.y)}" fill="${n.color || '#185FA5'}" font-size="${n.size || 20}">${esc(n.text)}</text></g>`);
     }
@@ -160,6 +184,8 @@ const PLAN_CSS = `
 .openlabel{font:13px sans-serif;fill:#5F5E5A}
 .ink{fill:none;stroke-linecap:round;stroke-linejoin:round}
 .ink.selected{stroke:#D85A30 !important}
+.shape.selected line:not(.hit),.shape.selected rect,.shape.selected circle,.shape.selected path{stroke:#D85A30 !important}
+.shape rect,.shape circle{pointer-events:all}
 .textnote text{font-family:'Comic Sans MS','Segoe Print',cursive,sans-serif}
 .textnote.selected text{fill:#D85A30}
 text{font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
@@ -194,6 +220,8 @@ export async function planPNG(plan, opts = {}) {
 
 // ---------------------------------------------------------------------------
 // Editor interactivo
+const SHAPE_TOOLS = ['room', 'dim', 'line', 'arrow', 'rect', 'circle', 'measure'];
+
 export class PlanEditor {
   constructor(host, plan, { onChange, onSelect } = {}) {
     this.host = host;
@@ -210,6 +238,7 @@ export class PlanEditor {
     this.pointers = new Map();
     this.penSeen = false;
     this.level = 'all';
+    this.snapOn = true;
     host.innerHTML = `<svg class="plan-svg" tabindex="0"><style>${PLAN_CSS}</style><g class="world"><g class="content"></g><g class="overlay"></g></g></svg>`;
     this.svg = host.querySelector('svg');
     this.world = host.querySelector('.world');
@@ -256,6 +285,20 @@ export class PlanEditor {
     this.select(null); this.changed();
   }
 
+  duplicateSelected() {
+    const s = this.getSelected(); if (!s) return;
+    const c = JSON.parse(JSON.stringify(s.obj)); c.id = uid();
+    if (s.kind === 'item') { c.x += 20; c.y += 20; this.update((p) => p.items.push(c)); }
+    else if (s.kind === 'note') {
+      if (c.points) c.points = c.points.map((q) => [q[0] + 20, q[1] + 20]);
+      else if ('x1' in c) { c.x1 += 20; c.y1 += 20; c.x2 += 20; c.y2 += 20; }
+      else if (c.kind === 'circle') { c.cx += 20; c.cy += 20; }
+      else { c.x += 20; c.y += 20; }
+      this.update((p) => p.notes.push(c));
+    } else return;
+    this.select(c.id);
+  }
+
   removeById(id) {
     const p = this.plan;
     p.items = p.items.filter((x) => x.id !== id);
@@ -288,6 +331,8 @@ export class PlanEditor {
   }
 
   // --- geometría
+  sn(v) { const st = this.snapOn ? 5 : 1; return Math.round(v / st) * st; }
+
   snapPoint(p, excludeWallId = null) {
     const tol = 22 / this.k + 6;
     let best = null, bd = tol;
@@ -299,7 +344,7 @@ export class PlanEditor {
       }
     }
     if (best) return { ...best };
-    return { x: Math.round(p.x / 5) * 5, y: Math.round(p.y / 5) * 5 };
+    return { x: this.sn(p.x), y: this.sn(p.y) };
   }
 
   straighten(a, b) {
@@ -308,8 +353,8 @@ export class PlanEditor {
     let ang = Math.atan2(dy, dx);
     const step = Math.PI / 4;
     const snapped = Math.round(ang / step) * step;
-    if (Math.abs(snapped - ang) < (10 * Math.PI) / 180) ang = snapped;
-    len = Math.round(len / 5) * 5;
+    if (Math.abs(snapped - ang) < ((this.snapOn ? 10 : 4) * Math.PI) / 180) ang = snapped;
+    len = this.sn(len);
     let end = { x: a.x + Math.cos(ang) * len, y: a.y + Math.sin(ang) * len };
     const s = this.snapPoint(end);
     if (Math.hypot(s.x - end.x, s.y - end.y) < 22 / this.k + 6) end = s;
@@ -343,6 +388,23 @@ export class PlanEditor {
       this.zoomAt(e.clientX, e.clientY, f);
     }, { passive: false });
     window.addEventListener('resize', () => this.fit());
+    this._keys = (e) => {
+      if (!document.body.contains(this.svg)) { window.removeEventListener('keydown', this._keys); return; }
+      if (e.target.closest && e.target.closest('input,textarea,select,dialog')) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? this.redo() : this.undo(); }
+      else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); this.redo(); }
+      else if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); this.duplicateSelected(); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') { if (this.selectedId) { e.preventDefault(); this.removeSelected(); } }
+      else if (e.key === 'Escape') { this.select(null); this.host.dispatchEvent(new CustomEvent('toolreset')); }
+      else if (this.selectedId && e.key.startsWith('Arrow')) {
+        const s = this.getSelected(); if (!s || s.kind !== 'item') return;
+        e.preventDefault();
+        const st = e.shiftKey ? 50 : (this.snapOn ? 5 : 1);
+        this.update(() => { if (e.key === 'ArrowLeft') s.obj.x -= st; if (e.key === 'ArrowRight') s.obj.x += st; if (e.key === 'ArrowUp') s.obj.y -= st; if (e.key === 'ArrowDown') s.obj.y += st; });
+      }
+    };
+    window.addEventListener('keydown', this._keys);
   }
 
   zoomAt(cx, cy, f) {
@@ -395,6 +457,8 @@ export class PlanEditor {
     } else if (t === 'wall') {
       const a = this.snapPoint(p);
       this.gesture = { mode: 'wall', a, pts: [p] };
+    } else if (SHAPE_TOOLS.includes(t)) {
+      this.gesture = { mode: 'shape', tool: t, a: this.snapPoint(p) };
     } else if (t === 'ink') {
       this.gesture = { mode: 'ink', pts: [[p.x, p.y]], width: e.pointerType === 'pen' ? 1.5 + (e.pressure || 0.5) * 4 : 3 };
     } else if (t === 'erase') {
@@ -416,14 +480,17 @@ export class PlanEditor {
     }
     const p = this.toWorld(e.clientX, e.clientY);
     if (g.mode === 'drag') {
-      const dx = Math.round((p.x - g.start.x) / 5) * 5, dy = Math.round((p.y - g.start.y) / 5) * 5;
+      const dx = this.sn(p.x - g.start.x), dy = this.sn(p.y - g.start.y);
       if (!dx && !dy && !g.moved) return;
       g.moved = true;
       const s = this.getSelected(); if (!s) return;
       if (s.kind === 'item') { s.obj.x = g.orig.x + dx; s.obj.y = g.orig.y + dy; }
       else if (s.kind === 'note') {
-        if (s.obj.kind === 'ink') s.obj.points = g.orig.points.map((q) => [q[0] + dx, q[1] + dy, q[2]]);
-        else { s.obj.x = g.orig.x + dx; s.obj.y = g.orig.y + dy; }
+        const o = g.orig;
+        if (s.obj.kind === 'ink') s.obj.points = o.points.map((q) => [q[0] + dx, q[1] + dy, q[2]]);
+        else if ('x1' in o) { s.obj.x1 = o.x1 + dx; s.obj.y1 = o.y1 + dy; s.obj.x2 = o.x2 + dx; s.obj.y2 = o.y2 + dy; }
+        else if (s.obj.kind === 'circle') { s.obj.cx = o.cx + dx; s.obj.cy = o.cy + dy; }
+        else { s.obj.x = o.x + dx; s.obj.y = o.y + dy; }
       } else if (s.kind === 'opening') {
         const w = this.plan.walls.find((x) => x.id === s.obj.wallId);
         if (w) {
@@ -435,7 +502,7 @@ export class PlanEditor {
       }
       this.render();
     } else if (g.mode === 'dragwall') {
-      const dx = Math.round((p.x - g.start.x) / 5) * 5, dy = Math.round((p.y - g.start.y) / 5) * 5;
+      const dx = this.sn(p.x - g.start.x), dy = this.sn(p.y - g.start.y);
       if (!dx && !dy && !g.moved) return;
       g.moved = true;
       const s = this.getSelected(); if (!s) return;
@@ -459,6 +526,25 @@ export class PlanEditor {
       const len = Math.hypot(b.x - g.a.x, b.y - g.a.y);
       this.overlay.innerHTML = `<line x1="${g.a.x}" y1="${g.a.y}" x2="${b.x}" y2="${b.y}" stroke="#D85A30" stroke-width="12" stroke-opacity=".7" stroke-linecap="square"/>
         <text x="${(g.a.x + b.x) / 2}" y="${(g.a.y + b.y) / 2 - 22}" font-size="${18 / Math.max(this.k, 0.4)}" fill="#D85A30" text-anchor="middle">${fmtM(len)} m</text>`;
+    } else if (g.mode === 'shape') {
+      const a = g.a; const lin = ['dim', 'line', 'arrow', 'measure'].includes(g.tool);
+      const b = lin ? this.straighten(a, p) : this.snapPoint(p);
+      g.b = b;
+      const fs = 18 / Math.max(this.k, 0.4); const col = '#D85A30';
+      let o = '';
+      if (g.tool === 'room' || g.tool === 'rect') {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+        o = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" fill-opacity=".08" stroke="${col}" stroke-width="${g.tool === 'room' ? 10 : 3}" stroke-opacity=".7"/>
+          <text x="${x + w / 2}" y="${y - 14}" font-size="${fs}" fill="${col}" text-anchor="middle">${fmtM(w)} × ${fmtM(h)} m</text>`;
+      } else if (g.tool === 'circle') {
+        const r = Math.hypot(b.x - a.x, b.y - a.y);
+        o = `<circle cx="${a.x}" cy="${a.y}" r="${r}" fill="${col}" fill-opacity=".08" stroke="${col}" stroke-width="3"/><text x="${a.x}" y="${a.y - r - 12}" font-size="${fs}" fill="${col}" text-anchor="middle">Ø ${fmtM(r * 2)} m</text>`;
+      } else {
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        o = `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="3" ${g.tool === 'measure' ? 'stroke-dasharray="8 6"' : ''}/>
+          <text x="${(a.x + b.x) / 2}" y="${(a.y + b.y) / 2 - 16}" font-size="${fs}" fill="${col}" text-anchor="middle">${fmtM(len)} m</text>`;
+      }
+      this.overlay.innerHTML = o;
     } else if (g.mode === 'ink') {
       g.pts.push([r1(p.x), r1(p.y)]);
       const d = g.pts.map((q, i) => `${i ? 'L' : 'M'}${q[0]} ${q[1]}`).join(' ');
@@ -494,6 +580,27 @@ export class PlanEditor {
         this.plan.walls.push({ id: uid(), x1: g.a.x, y1: g.a.y, x2: b.x, y2: b.y });
         this.changed();
       }
+    } else if (g.mode === 'shape') {
+      const a = g.a, b = g.b || a, tool = g.tool;
+      const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y), len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (tool === 'measure') {
+        if (len > 2) this.flash(`Distancia: ${fmtM(len)} m`);
+      } else if (tool === 'room') {
+        if (w >= 50 && h >= 50) {
+          this.snapshot();
+          const x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y), x1 = x0 + w, y1 = y0 + h;
+          this.plan.walls.push({ id: uid(), x1: x0, y1: y0, x2: x1, y2: y0 }, { id: uid(), x1: x1, y1: y0, x2: x1, y2: y1 }, { id: uid(), x1: x1, y1: y1, x2: x0, y2: y1 }, { id: uid(), x1: x0, y1: y1, x2: x0, y2: y0 });
+          this.changed();
+        }
+      } else if (tool === 'rect') {
+        if (w >= 10 && h >= 10) { this.snapshot(); this.plan.notes.push({ id: uid(), kind: 'rect', x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w, h, color: this.inkColor, fill: true }); this.changed(); }
+      } else if (tool === 'circle') {
+        if (len >= 8) { this.snapshot(); this.plan.notes.push({ id: uid(), kind: 'circle', cx: a.x, cy: a.y, r: Math.round(len), color: this.inkColor, fill: true }); this.changed(); }
+      } else if (len >= 10) {
+        this.snapshot();
+        this.plan.notes.push({ id: uid(), kind: tool, x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: tool === 'dim' ? '#444441' : this.inkColor });
+        this.changed();
+      }
     } else if (g.mode === 'ink') {
       if (g.pts.length > 1) {
         this.snapshot();
@@ -523,7 +630,7 @@ export class PlanEditor {
     } else if (t === 'item' && this.itemType) {
       const c = byType(this.itemType);
       this.snapshot();
-      const it = { id: uid(), type: c.type, label: c.label, w: c.w, d: c.d, rot: 0, x: Math.round((p.x - c.w / 2) / 5) * 5, y: Math.round((p.y - c.d / 2) / 5) * 5, level: c.type === 'altillo' ? 'alta' : 'baja' };
+      const it = { id: uid(), type: c.type, label: c.label, w: c.w, d: c.d, rot: 0, x: this.sn(p.x - c.w / 2), y: this.sn(p.y - c.d / 2), level: c.type === 'altillo' ? 'alta' : 'baja' };
       this.plan.items.push(it);
       this.setTool('select');
       this.changed(); this.select(it.id);

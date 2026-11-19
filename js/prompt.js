@@ -74,7 +74,15 @@ export function describePlan(plan) {
   return { size: `${fmtM(W)} m de ancho × ${fmtM(L)} m de fondo`, lines, texts, hasInk: plan.notes.some((n) => n.kind === 'ink') };
 }
 
-export function renderPrompt(project, { view = 'fondo', customView = '', hasPhoto = true, hasStyleRef = false } = {}) {
+// Piezas con producto real; las que tienen foto van como imagen de referencia (máximo 6)
+export function productRefs(project, max = 6) {
+  const items = (project.plan?.items || []).filter((it) => it.product && (it.product.name || it.product.fileId));
+  const withPhoto = items.filter((it) => it.product.fileId).slice(0, max);
+  const named = items.filter((it) => !withPhoto.includes(it));
+  return { withPhoto, named };
+}
+
+export function renderPrompt(project, { view = 'fondo', customView = '', hasPhoto = true, hasStyleRef = false, useProducts = true } = {}) {
   const f = project;
   const d = describePlan(f.plan);
   const room = ROOM_TYPES[f.roomType] || 'espacio';
@@ -83,6 +91,11 @@ export function renderPrompt(project, { view = 'fondo', customView = '', hasPhot
   if (hasPhoto) imgs.push(`la imagen ${n++} (foto real del espacio actual) como base de perspectiva, proporciones y elementos fijos`);
   imgs.push(`la imagen ${n++} (plano a escala visto desde arriba; arriba es el fondo y abajo la entrada) como distribución obligatoria`);
   if (hasStyleRef) imgs.push(`la imagen ${n++} (render anterior del mismo proyecto) como referencia exacta de estilo, materiales, iluminación y mobiliario`);
+  const refs = useProducts ? productRefs(f) : { withPhoto: [], named: [] };
+  const prodLines = [];
+  for (const it of refs.withPhoto) prodLines.push(`- ${it.label}: debe ser exactamente el producto de la imagen ${n++}${it.product.name ? ` (${it.product.name})` : ''}, con su forma, color y material.`);
+  for (const it of refs.named) prodLines.push(`- ${it.label}: ${it.product.name}.`);
+  if (refs.withPhoto.length) imgs.push(`las imágenes de productos reales como referencia del mobiliario elegido`);
 
   let viewTxt = '';
   if (view === 'fondo') viewTxt = 'Cámara situada en la entrada, a la altura de los ojos, mirando hacia el fondo. En la imagen, la pared izquierda del plano queda a la izquierda y la derecha a la derecha.' + (hasPhoto ? ' Mantén el mismo encuadre que la foto.' : '');
@@ -99,6 +112,7 @@ export function renderPrompt(project, { view = 'fondo', customView = '', hasPhot
   if (f.description) parts.push(`Lo que quiere el cliente: ${f.description.trim()}`);
   if (d.lines.length) parts.push(`Distribución según el plano (vista desde la entrada mirando al fondo):\n${d.lines.join('\n')}`);
   if (d.texts.length) parts.push(`Indicaciones escritas:\n${d.texts.join('\n')}`);
+  if (prodLines.length) parts.push(`Mobiliario real elegido por el cliente:\n${prodLines.join('\n')}`);
   if (d.hasInk) parts.push('El plano incluye anotaciones a mano del arquitecto: tenlas en cuenta.');
   if (f.materials) parts.push(`Materiales y acabados: ${f.materials.trim()}.`);
   parts.push(`Techo: ${f.ceiling?.trim() || 'plano, liso y pintado en blanco'}. No inventes bóvedas, vigas de madera ni elementos que no estén en el plano.`);
