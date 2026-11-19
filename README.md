@@ -21,7 +21,7 @@ App (PWA) para arquitectos e interioristas: de las fotos y las medidas de una ha
 
 5. **Cliente**: presentación en un único archivo HTML (portada, datos del proyecto, renders, vídeo y plano) para enviar por WhatsApp o email. Se abre en cualquier móvil sin instalar nada.
 
-Los datos se guardan en el dispositivo (IndexedDB) y, si se activa, se **sincronizan con Supabase** entre el iPad y el ordenador. Cada proyecto se puede exportar e importar también como `.json`, con sus imágenes incluidas.
+Los proyectos se guardan solos mientras se trabaja y también con el botón **Guardar** de la barra superior, aunque estén a medias. Cada proyecto tiene un estado (borrador, en curso, presentado o finalizado) y la lista se puede filtrar por estado. Los datos se guardan en el dispositivo (IndexedDB) y, si se activa, se **sincronizan con Supabase** entre el iPad y el ordenador. Cada proyecto se puede exportar e importar también como `.json`, con sus imágenes incluidas.
 
 ## Sincronización entre dispositivos (Supabase)
 

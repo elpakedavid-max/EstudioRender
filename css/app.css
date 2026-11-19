@@ -138,3 +138,15 @@ a.btn { text-decoration: none; color: inherit; }
 a.btn.dark, a.btn.primary { color: #fff; }
 .field label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); min-height: 36px; }
 .field label input[type=checkbox] { width: 20px; height: 20px; }
+
+.save-state { font-size: 12.5px; color: #c9c7bf; white-space: nowrap; }
+.save-state.dirty { color: #f0c27a; }
+.save-btn { border: 0; background: var(--accent); color: #fff; font-weight: 600; padding: 8px 16px; border-radius: 10px; min-height: 40px; }
+.tabs:not([hidden]) ~ #btn-settings { margin-left: 0; }
+.status { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; margin-bottom: 4px; }
+.status.borrador { background: #f1efe8; color: #5f5e5a; }
+.status.curso { background: #faeeda; color: #854f0b; }
+.status.presentado { background: #e6f1fb; color: #185fa5; }
+.status.finalizado { background: #e1f5ee; color: #0f6e56; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+@media (max-width: 760px) { .save-state { display: none; } }

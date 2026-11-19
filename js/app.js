@@ -73,19 +73,59 @@ function setSyncStatus(msg) {
 }
 window.addEventListener('er-saved', () => sync.scheduleAutoSync(setSyncStatus));
 
+export const STATUS = { borrador: 'Borrador', curso: 'En curso', presentado: 'Presentado al cliente', finalizado: 'Finalizado' };
+
+function setSaveState(text, dirty = false) {
+  const el = $('#save-state'); if (!el) return;
+  el.textContent = text; el.classList.toggle('dirty', dirty);
+}
+
+// Guardado automático (agrupa cambios) + guardado manual con el botón "Guardar"
 function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => current && db.saveProject(current), 300);
+  setSaveState('Cambios sin guardar…', true);
+  saveTimer = setTimeout(async () => {
+    if (!current) return;
+    await db.saveProject(current);
+    setSaveState(`Guardado ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`);
+  }, 600);
 }
+
+async function saveNow({ quiet = false } = {}) {
+  clearTimeout(saveTimer);
+  if (!current) return;
+  await db.saveProject(current);
+  const hora = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  setSaveState(`Guardado ${hora}`);
+  if (sync.loggedIn() && navigator.onLine) {
+    try {
+      setSaveState('Subiendo a la nube…');
+      await sync.syncNow(setSyncStatus);
+      setSaveState(`Guardado en la nube ${hora}`);
+      if (!quiet) toast('Proyecto guardado en el dispositivo y en la nube');
+      return;
+    } catch (e) {
+      setSaveState(`Guardado ${hora} (sin subir)`, true);
+      if (!quiet) toast('Guardado en el dispositivo. No se pudo subir a la nube: ' + e.message, 6000);
+      return;
+    }
+  }
+  if (!quiet) toast(sync.loggedIn() ? 'Guardado en el dispositivo (sin conexión: se subirá luego)' : 'Proyecto guardado en este dispositivo');
+}
+window.addEventListener('beforeunload', () => { if (current) db.saveProject(current); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && current) db.saveProject(current); });
 
 // ---------- cabecera
 function setHeader(title, inProject) {
   $('#title').textContent = title;
   $('#btn-back').hidden = !inProject;
   $('#tabs').hidden = !inProject;
+  $('#btn-save').hidden = !inProject;
+  $('#save-state').hidden = !inProject;
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
 }
-$('#btn-back').onclick = () => { location.hash = ''; };
+$('#btn-back').onclick = async () => { await saveNow({ quiet: true }); location.hash = ''; };
+$('#btn-save').onclick = () => saveNow();
 $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) { location.hash = `#p/${current.id}/${b.dataset.tab}`; } };
 $('#btn-settings').onclick = openSettings;
 
@@ -99,22 +139,27 @@ async function route() {
   if (!current) { location.hash = ''; return; }
   tab = m[2] || 'ficha';
   setHeader(current.name || 'Proyecto', true);
+  if (!$('#save-state').classList.contains('dirty')) setSaveState(`Guardado ${new Date(current.updatedAt).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
   ({ ficha: renderFicha, plano: renderPlano, render: renderRenders, video: renderVideo }[tab] || renderFicha)();
 }
 
 // ---------- inicio
 async function renderHome() {
   setHeader('EstudioRender', false);
-  const list = await db.listProjects();
+  const all = await db.listProjects();
+  const filter = renderHome.filter || 'todos';
+  const list = filter === 'todos' ? all : all.filter((p) => (p.status || 'borrador') === filter);
+  const counts = {}; all.forEach((p) => { const k = p.status || 'borrador'; counts[k] = (counts[k] || 0) + 1; });
   const cards = await Promise.all(list.map(async (p) => {
     const cover = p.renders?.[0]?.fileId || p.photos?.[0];
     const url = cover ? await db.fileURL(cover) : '';
     return `<a class="card" href="#p/${p.id}" style="text-decoration:none;color:inherit">
       <div class="thumb" style="${url ? `background-image:url('${url}')` : ''}">${url ? '' : 'Sin imágenes'}</div>
-      <div class="body"><b>${esc(p.name)}</b><span class="muted small">${esc(ROOM_TYPES[p.roomType] || '')}${p.client ? ' · ' + esc(p.client) : ''} · ${new Date(p.updatedAt).toLocaleDateString('es-ES')}</span></div></a>`;
+      <div class="body"><span class="status ${p.status || 'borrador'}">${STATUS[p.status || 'borrador']}</span><b>${esc(p.name)}</b><span class="muted small">${esc(ROOM_TYPES[p.roomType] || '')}${p.client ? ' · ' + esc(p.client) : ''} · ${new Date(p.updatedAt).toLocaleDateString('es-ES')}</span></div></a>`;
   }));
   view.innerHTML = `<div class="page">
     <h2>Proyectos</h2>
+    ${all.length ? `<div class="filters" id="filters"><button class="chip ${filter === 'todos' ? 'on' : ''}" data-f="todos">Todos (${all.length})</button>${Object.entries(STATUS).map(([k, v]) => counts[k] ? `<button class="chip ${filter === k ? 'on' : ''}" data-f="${k}">${v} (${counts[k]})</button>` : '').join('')}</div>` : ''}
     <div class="cards">
       <button class="card new" id="new">+ Nuevo proyecto</button>
       ${cards.join('')}
@@ -124,6 +169,7 @@ async function renderHome() {
         : '<span class="muted small">Para tener los proyectos en el iPad y en el ordenador, activa la sincronización en Ajustes.</span>'}</div>
   </div>`;
   $('#new').onclick = newProject;
+  const fl = $('#filters'); if (fl) fl.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { renderHome.filter = b.dataset.f; renderHome(); } };
   const sn = $('#sync-now');
   if (sn) sn.onclick = async () => {
     sn.disabled = true;
@@ -138,7 +184,7 @@ async function newProject() {
   const name = await ask('Nombre del proyecto', '', { placeholder: 'Ej.: Loft calle Real 12' });
   if (name === null) return;
   const p = {
-    id: db.uid(), name: name || 'Proyecto sin nombre', client: '', roomType: 'loft',
+    id: db.uid(), name: name || 'Proyecto sin nombre', client: '', roomType: 'loft', status: 'borrador',
     width: 500, length: 700, height: 280, description: '', style: STYLES[0], materials: '', ceiling: 'plano, liso y pintado en blanco', light: 'dia',
     photos: [], plan: null, renders: [], createdAt: Date.now(),
   };
@@ -155,6 +201,7 @@ async function renderFicha() {
     <h2>Ficha del proyecto</h2>
     <div class="form">
       <div class="field"><label>Nombre</label><input data-k="name" value="${esc(p.name)}"></div>
+      <div class="field"><label>Estado del proyecto</label><select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === (p.status || 'borrador') ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div class="field"><label>Cliente</label><input data-k="client" value="${esc(p.client)}"></div>
       <div class="field"><label>Tipo de estancia</label><select data-k="roomType">${Object.entries(ROOM_TYPES).map(([k, v]) => `<option value="${k}" ${k === p.roomType ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div class="field"><label>Ancho (cm)</label><input type="number" inputmode="numeric" data-k="width" value="${p.width || ''}"></div>
@@ -171,6 +218,7 @@ async function renderFicha() {
     <p class="muted small">La primera es la principal: se usa como base de la perspectiva de los renders. Toca una foto para hacerla principal.</p>
     <div class="photos">${photoHtml.join('')}<button class="addphoto" id="addphoto">+ Añadir fotos</button></div>
     <div class="row" style="margin-top:28px">
+      <button class="btn primary" id="save-exit">Guardar y salir</button>
       <a class="btn dark" href="#p/${p.id}/plano">Siguiente: plano →</a>
       <button class="btn" id="export">Exportar proyecto</button>
       <button class="btn danger" id="delete">Eliminar proyecto</button>
@@ -200,6 +248,7 @@ async function renderFicha() {
     if (ph) { current.photos = [ph.dataset.id, ...current.photos.filter((x) => x !== ph.dataset.id)]; await db.saveProject(current); renderFicha(); }
   };
   $('#export').onclick = exportProject;
+  $('#save-exit').onclick = async () => { await saveNow(); location.hash = ''; };
   $('#delete').onclick = async () => {
     if (!(await confirmDlg(`¿Eliminar "${current.name}" y todas sus imágenes? No se puede deshacer.`, 'Eliminar'))) return;
     await sync.markDeleted(current.id);
