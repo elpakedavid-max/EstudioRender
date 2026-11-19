@@ -1,79 +1,85 @@
 1
-00:00:00,500 --> 00:00:05,990
-Te presento EstudioRender:
-del boceto al render, delante de tu cliente.
+00:00:00,380 --> 00:00:06,870
+Te presento EstudioRender: del boceto
+al render, delante de tu cliente.
 
 2
-00:00:07,500 --> 00:00:10,090
+00:00:07,380 --> 00:00:10,070
 Enseñar una idea en plena obra es difícil.
 
 3
-00:00:10,110 --> 00:00:13,360
-El cliente pregunta cómo quedará… y un render
-tarda días.
+00:00:10,090 --> 00:00:14,270
+El cliente pregunta cómo
+quedará… y un render tarda días.
 
 4
-00:00:16,500 --> 00:00:20,570
-Primero, haz fotos del espacio, apunta las
-medidas y lo que quiere el cliente.
+00:00:16,380 --> 00:00:20,850
+Primero, haz fotos del espacio, apunta
+las medidas y lo que quiere el cliente.
 
 5
-00:00:20,590 --> 00:00:22,320
+00:00:20,870 --> 00:00:23,230
 Todo queda guardado en el proyecto.
 
 6
-00:00:25,500 --> 00:00:30,010
-Después, dibuja el plano con el lápiz del
-iPad. Las paredes se enderezan solas, y
+00:00:25,380 --> 00:00:28,230
+Después, dibuja el plano
+con el lápiz del iPad.
 
 7
-00:00:30,030 --> 00:00:32,130
-colocas puertas, ventanas y más de setenta
+00:00:28,250 --> 00:00:31,220
+Las paredes se enderezan
+solas, y colocas puertas,
 
 8
-00:00:32,150 --> 00:00:34,540
-muebles que estiras y giras con el dedo.
+00:00:31,240 --> 00:00:35,730
+ventanas y más de setenta muebles
+que estiras y giras con el dedo.
 
 9
-00:00:38,500 --> 00:00:40,630
-Elige muebles reales de tiendas como IKEA o
+00:00:38,380 --> 00:00:41,510
+Elige muebles reales de tiendas
+como IKEA o Leroy Merlin.
 
 10
-00:00:40,650 --> 00:00:43,850
-Leroy Merlin. Salen en el render y en la lista
-de compra.
+00:00:41,530 --> 00:00:44,720
+Salen en el render y en la lista de compra.
 
 11
-00:00:47,500 --> 00:00:52,270
-Con el plano, la foto y el estilo, la
-inteligencia artificial crea un render
+00:00:47,380 --> 00:00:49,240
+Con el plano, la foto y el estilo,
 
 12
-00:00:52,290 --> 00:00:53,290
-fotorrealista en segundos.
+00:00:49,260 --> 00:00:53,590
+la inteligencia artificial crea un
+render fotorrealista en segundos.
 
 13
-00:00:53,310 --> 00:00:54,320
+00:00:53,610 --> 00:00:54,780
 ¿Quieres cambiar algo?
 
 14
-00:00:54,340 --> 00:00:55,000
+00:00:54,800 --> 00:00:56,060
 Solo pídelo.
 
 15
-00:00:59,500 --> 00:01:02,850
-Y compártelo al momento:
-un vídeo con música, una presentación para
+00:00:59,380 --> 00:01:02,050
+Y compártelo al momento: un vídeo con música,
 
 16
-00:01:02,870 --> 00:01:05,310
-WhatsApp o email, y la lista de compra.
+00:01:02,070 --> 00:01:06,210
+una presentación para WhatsApp
+o email, y la lista de compra.
 
 17
-00:01:09,500 --> 00:01:12,630
-Todo queda sincronizado entre el iPad, el
-ordenador y el móvil.
+00:01:09,380 --> 00:01:13,310
+Todo queda sincronizado entre el
+iPad, el ordenador y el móvil.
 
 18
-00:01:16,500 --> 00:01:19,590
-EstudioRender. Pide tu demo a MR Informática.
+00:01:16,380 --> 00:01:17,540
+EstudioRender.
+
+19
+00:01:17,560 --> 00:01:20,260
+Pide tu demo a MR Informática.
