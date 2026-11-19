@@ -172,7 +172,8 @@ export function planSVGString(plan, { title = '', subtitle = '', level = 'all' }
   const x0 = b.minX - pad, y0 = b.minY - pad - (title ? 50 : 0);
   const w = b.maxX - b.minX + pad * 2, h = b.maxY - b.minY + pad * 2 + (title ? 50 : 0);
   const head = title ? `<text x="${b.minX}" y="${b.minY - pad + 10}" font-size="28" font-weight="600" fill="#2C2C2A">${esc(title)}</text><text x="${b.minX}" y="${b.minY - pad + 42}" font-size="17" fill="#5F5E5A">${esc(subtitle)}</text>` : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${w} ${h}" width="${Math.round(w * 2)}" height="${Math.round(h * 2)}"><style>${PLAN_CSS}</style><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#ffffff"/>${head}${planMarkup(plan, { level })}</svg>`;
+  const headBg = title ? `<rect x="${x0}" y="${y0}" width="${w}" height="${b.minY - pad + 60 - y0}" fill="#ffffff"/>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${w} ${h}" width="${Math.round(w * 2)}" height="${Math.round(h * 2)}"><style>${PLAN_CSS}</style><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#ffffff"/>${planMarkup(plan, { level })}${headBg}${head}</svg>`;
 }
 
 export async function planPNG(plan, opts = {}) {

@@ -4,6 +4,8 @@ import { PlanEditor, emptyPlan, planPNG, fmtM } from './plan.js';
 import { renderPrompt, editPrompt, videoPrompt, VIEWS, STYLES, LIGHTS, CAMERA_MOVES } from './prompt.js';
 import { generateImage, proposeLayout, autoReady } from './ai.js';
 import { buildTimeline, drawFrame, recordVideo } from './video.js';
+import { buildPresentation } from './present.js';
+import * as sync from './sync.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -64,6 +66,13 @@ function pickFiles(accept = 'image/*', multiple = true, capture = false) {
   });
 }
 
+let syncStatus = '';
+function setSyncStatus(msg) {
+  syncStatus = msg;
+  const el = $('#sync-status'); if (el) el.textContent = msg;
+}
+window.addEventListener('er-saved', () => sync.scheduleAutoSync(setSyncStatus));
+
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => current && db.saveProject(current), 300);
@@ -110,9 +119,18 @@ async function renderHome() {
       <button class="card new" id="new">+ Nuevo proyecto</button>
       ${cards.join('')}
     </div>
-    <div class="row" style="margin-top:24px"><button class="btn" id="import">Importar proyecto (.json)</button></div>
+    <div class="row" style="margin-top:24px"><button class="btn" id="import">Importar proyecto (.json)</button>
+      ${sync.loggedIn() ? `<button class="btn" id="sync-now">Sincronizar ahora</button><span class="muted small" id="sync-status">${esc(syncStatus || 'Sincronización activa: ' + (sync.session()?.email || ''))}</span>`
+        : '<span class="muted small">Para tener los proyectos en el iPad y en el ordenador, activa la sincronización en Ajustes.</span>'}</div>
   </div>`;
   $('#new').onclick = newProject;
+  const sn = $('#sync-now');
+  if (sn) sn.onclick = async () => {
+    sn.disabled = true;
+    try { const r = await sync.syncNow(setSyncStatus); toast(r.msg); if (r.down || r.del) renderHome(); }
+    catch (e) { setSyncStatus('Error: ' + e.message); toast('No se pudo sincronizar: ' + e.message, 6000); }
+    sn.disabled = false;
+  };
   $('#import').onclick = importProject;
 }
 
@@ -184,6 +202,7 @@ async function renderFicha() {
   $('#export').onclick = exportProject;
   $('#delete').onclick = async () => {
     if (!(await confirmDlg(`¿Eliminar "${current.name}" y todas sus imágenes? No se puede deshacer.`, 'Eliminar'))) return;
+    await sync.markDeleted(current.id);
     await db.deleteProject(current); current = null; location.hash = '';
   };
 }
@@ -493,7 +512,7 @@ async function addRender(blob, meta) {
 }
 
 // ---------- vídeo
-let vstate = { picked: null, vertical: false, music: true, plan: true, move: 'avance' };
+let vstate = { picked: null, vertical: false, music: true, plan: true, move: 'avance', lastVideo: null, withVideo: true };
 async function renderVideo() {
   const p = current;
   if (!vstate.picked) vstate.picked = p.renders.slice(0, 4).map((r) => r.id);
@@ -514,6 +533,10 @@ async function renderVideo() {
       <div class="row" style="margin-top:14px"><button class="btn" id="v-preview">Vista previa</button><button class="btn primary" id="v-make" ${p.renders.length ? '' : 'disabled'}>Crear vídeo</button></div>
       <div class="progress" style="margin-top:12px"><div id="v-prog"></div></div>
       <div class="row" id="v-out" style="margin-top:12px"></div>
+      <h3>Presentación para el cliente</h3>
+      <p class="muted small">Un único archivo con los renders elegidos, el plano y los datos del proyecto. Se abre en cualquier móvil sin instalar nada: envíalo por WhatsApp o email.</p>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="p-video" ${vstate.withVideo ? 'checked' : ''} ${vstate.lastVideo ? '' : 'disabled'}> Incluir el vídeo ${vstate.lastVideo ? `(${(vstate.lastVideo.size / 1e6).toFixed(1)} MB)` : '(crea primero el vídeo)'}</label>
+      <div class="row" style="margin-top:10px"><button class="btn dark" id="p-make" ${p.renders.length ? '' : 'disabled'}>Crear presentación</button></div>
     </div>
     <div>
       <canvas id="v-canvas" class="video-stage ${vstate.vertical ? 'vertical' : ''}" width="${vstate.vertical ? 1080 : 1920}" height="${vstate.vertical ? 1920 : 1080}"></canvas>
@@ -536,6 +559,25 @@ async function renderVideo() {
   $('#v-plan').onchange = (e) => (vstate.plan = e.target.checked);
   $('#v-move').onchange = (e) => { vstate.move = e.target.value; $('#v-prompt').value = videoPrompt(vstate.move); };
   $('#v-copy').onclick = () => copy($('#v-prompt').value);
+  $('#p-video').onchange = (e) => (vstate.withVideo = e.target.checked);
+  $('#p-make').onclick = async (e) => {
+    if (!vstate.picked.length) return toast('Elige al menos un render');
+    const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner"></span> Preparando…';
+    try {
+      const slides = [];
+      for (const id of vstate.picked) { const r = p.renders.find((x) => x.id === id); slides.push({ blob: await db.getFile(r.fileId), caption: r.caption }); }
+      const html = await buildPresentation({
+        project: p, slides, studio: s.studioName, roomLabel: ROOM_TYPES[p.roomType],
+        size: `${fmtM(p.width)} × ${fmtM(p.length)} m${p.width && p.length ? ` (${Math.round(p.width * p.length / 1e4)} m²)` : ''}`,
+        planBlob: vstate.plan && p.plan ? await planPNG(p.plan, { title: p.name, subtitle: `${fmtM(p.width)} × ${fmtM(p.length)} m` }) : null,
+        videoBlob: vstate.withVideo ? vstate.lastVideo : null,
+      });
+      const file = new File([html], `${slug(p.name)}-propuesta.html`, { type: 'text/html' });
+      if (!(await shareFiles([file], p.name))) download(file, file.name);
+      toast('Presentación lista');
+    } catch (err) { toast('No se pudo crear: ' + err.message, 6000); }
+    b.disabled = false; b.textContent = 'Crear presentación';
+  };
   const canvas = $('#v-canvas');
 
   const timeline = async () => {
@@ -566,6 +608,8 @@ async function renderVideo() {
       const name = `${slug(p.name)}-presentacion.${ext}`;
       const out = $('#v-out');
       out.innerHTML = `<button class="btn primary" id="v-dl">Descargar vídeo (${(blob.size / 1e6).toFixed(1)} MB)</button><button class="btn" id="v-share">Compartir</button>`;
+      vstate.lastVideo = blob;
+      const pv = $('#p-video'); pv.disabled = false; pv.checked = true; vstate.withVideo = true; pv.parentElement.lastChild.textContent = ` Incluir el vídeo (${(blob.size / 1e6).toFixed(1)} MB)`;
       $('#v-dl').onclick = () => download(blob, name);
       $('#v-share').onclick = async () => { if (!(await shareFiles([new File([blob], name, { type: blob.type })], p.name))) download(blob, name); };
       toast('Vídeo listo');
@@ -591,17 +635,40 @@ function openSettings() {
         <div class="field"><label>Clave anon de Supabase</label><input name="proxyToken" type="password" value="${esc(s.proxyToken)}"></div>
       </div>
     </div>
-    <div class="field" style="margin-top:12px"><label>Nombre del estudio (sale al final del vídeo)</label><input name="studioName" value="${esc(s.studioName)}"></div>
+    <h3>Sincronización entre dispositivos (Supabase)</h3>
+    <div class="form">
+      <div class="field"><label>URL del proyecto Supabase</label><input name="supabaseUrl" value="${esc(s.supabaseUrl)}" placeholder="https://xxxx.supabase.co"></div>
+      <div class="field"><label>Clave anon</label><input name="supabaseAnon" type="password" value="${esc(s.supabaseAnon)}"></div>
+    </div>
+    <div id="sync-auth" style="margin-top:10px">${sync.session() ? `<div class="row"><span class="small">Sesión iniciada: <b>${esc(sync.session().email)}</b></span><button type="button" class="btn" id="s-out">Cerrar sesión</button></div>`
+      : `<div class="form"><div class="field"><label>Email</label><input name="sEmail" type="email" autocomplete="username"></div><div class="field"><label>Contraseña</label><input name="sPass" type="password" autocomplete="current-password"></div></div>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn dark" id="s-in">Entrar</button><button type="button" class="btn" id="s-up">Crear cuenta</button></div>`}</div>
+    <div class="field" style="margin-top:12px"><label>Nombre del estudio (sale en el vídeo y la presentación)</label><input name="studioName" value="${esc(s.studioName)}"></div>
     <div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" value="cancel">Cancelar</button><button class="btn primary" value="ok">Guardar</button></div></form>`);
   const f = $('form', d);
   f.onchange = () => {
     $$('.chip', f).forEach((c) => c.classList.toggle('on', $('input', c).checked));
     $('#auto-opts', f).hidden = f.elements.mode.value !== 'auto';
   };
+  const keepSync = () => { const n = db.getSettings(); n.supabaseUrl = f.elements.supabaseUrl.value.trim(); n.supabaseAnon = f.elements.supabaseAnon.value.trim(); db.setSettings(n); };
+  const authAct = async (fn, okMsg) => {
+    keepSync();
+    if (!sync.configured()) return toast('Pon primero la URL y la clave anon de Supabase');
+    try {
+      const r = await fn(f.elements.sEmail.value.trim(), f.elements.sPass.value);
+      if (r === false) { toast('Cuenta creada: confirma el email que te ha llegado y luego pulsa Entrar', 7000); return; }
+      toast(okMsg); d.close(); openSettings();
+      sync.syncNow(setSyncStatus).then((x) => { toast(x.msg); if (!current) renderHome(); }).catch((e) => toast('Sincronización: ' + e.message, 6000));
+    } catch (e) { toast(e.message, 6000); }
+  };
+  const bIn = $('#s-in', f), bUp = $('#s-up', f), bOut = $('#s-out', f);
+  if (bIn) bIn.onclick = () => authAct(sync.signIn, 'Sesión iniciada');
+  if (bUp) bUp.onclick = () => authAct(sync.signUp, 'Cuenta creada');
+  if (bOut) bOut.onclick = () => { sync.signOut(); toast('Sesión cerrada'); d.close(); openSettings(); };
   d.onclose = () => {
     if (d.returnValue !== 'ok') return;
-    const n = { ...s };
-    ['apiKey', 'imageModel', 'textModel', 'proxyUrl', 'proxyToken', 'studioName'].forEach((k) => (n[k] = f.elements[k].value.trim()));
+    const n = { ...db.getSettings() };
+    ['apiKey', 'imageModel', 'textModel', 'proxyUrl', 'proxyToken', 'studioName', 'supabaseUrl', 'supabaseAnon'].forEach((k) => (n[k] = f.elements[k].value.trim()));
     n.mode = f.elements.mode.value;
     db.setSettings(n);
     toast(n.mode === 'auto' && !n.apiKey && !n.proxyUrl ? 'Modo automático: falta la clave de Gemini' : 'Ajustes guardados');
@@ -643,3 +710,4 @@ async function importProject() {
 // ---------- arranque
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 route();
+if (sync.loggedIn() && navigator.onLine) sync.syncNow(setSyncStatus).then((r) => { if (!current && (r.down || r.del)) renderHome(); }).catch((e) => setSyncStatus('Sin sincronizar: ' + e.message));

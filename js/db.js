@@ -47,6 +47,7 @@ export async function getProject(id) {
 export async function saveProject(p) {
   p.updatedAt = Date.now();
   await tx('projects', 'readwrite', (s) => req2p(s.put(p)));
+  try { window.dispatchEvent(new Event('er-saved')); } catch { /* fuera del navegador */ }
   return p;
 }
 
@@ -54,6 +55,16 @@ export async function deleteProject(p) {
   const ids = [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId)].map((x) => (typeof x === 'string' ? x : x.fileId));
   await tx('files', 'readwrite', (s) => Promise.all(ids.map((id) => req2p(s.delete(id)))));
   await tx('projects', 'readwrite', (s) => req2p(s.delete(p.id)));
+}
+
+export async function putProjectRaw(p) {
+  await tx('projects', 'readwrite', (s) => req2p(s.put(p)));
+  return p;
+}
+
+export async function putFileWithId(id, blob) {
+  await tx('files', 'readwrite', (s) => req2p(s.put({ id, blob, type: blob.type })));
+  return id;
 }
 
 export async function putFile(blob) {
@@ -91,6 +102,8 @@ const DEFAULT_SETTINGS = {
   imageModel: 'gemini-3-pro-image',
   textModel: 'gemini-3-flash-preview',
   studioName: '',
+  supabaseUrl: '',           // sincronización entre dispositivos
+  supabaseAnon: '',
 };
 export function getSettings() {
   try {

@@ -19,7 +19,16 @@ App (PWA) para arquitectos e interioristas: de las fotos y las medidas de una ha
    - Montaje en el propio dispositivo con los renders elegidos, movimientos de cámara suaves, rótulos, el plano y música generada sin derechos, en horizontal 16:9 o vertical 9:16.
    - Prompt listo para hacer un recorrido con IA en Veo o Kling.
 
-Los datos se guardan en el dispositivo (IndexedDB). Cada proyecto se puede exportar e importar como `.json`, con sus imágenes incluidas.
+5. **Cliente**: presentación en un único archivo HTML (portada, datos del proyecto, renders, vídeo y plano) para enviar por WhatsApp o email. Se abre en cualquier móvil sin instalar nada.
+
+Los datos se guardan en el dispositivo (IndexedDB) y, si se activa, se **sincronizan con Supabase** entre el iPad y el ordenador. Cada proyecto se puede exportar e importar también como `.json`, con sus imágenes incluidas.
+
+## Sincronización entre dispositivos (Supabase)
+
+1. Crear un proyecto en supabase.com (gratis).
+2. En *SQL Editor*, ejecutar `supabase/schema.sql`. Crea la tabla `projects` con permisos por usuario y el almacenamiento privado `estudiorender`.
+3. En la app: Ajustes → *Sincronización*. Poner la URL del proyecto y la clave *anon* (Project Settings → API) y crear la cuenta con email y contraseña.
+4. En el otro dispositivo, los mismos datos y *Entrar*. La sincronización se hace al abrir la app, unos segundos después de cada cambio y con el botón *Sincronizar ahora*.
 
 ## Publicarla
 
@@ -59,13 +68,15 @@ js/catalog.js         biblioteca de muebles y símbolos
 js/prompt.js          prompts de render, de corrección y de vídeo
 js/ai.js              llamadas a Gemini (directas o vía Supabase)
 js/video.js           vídeo de presentación (canvas + MediaRecorder + música WebAudio)
+js/present.js         presentación HTML para el cliente
+js/sync.js            sincronización con Supabase (sesión, tabla y almacenamiento)
 js/db.js              almacenamiento local y ajustes
 sw.js                 funcionamiento sin conexión
 supabase/functions/gemini/index.ts   proxy seguro para la clave de Gemini
+supabase/schema.sql   tablas y permisos para la sincronización
 ```
 
 ## Próximos pasos
 
-- Sincronizar los proyectos con Supabase entre el iPad y el ordenador.
-- Enlace para compartir el proyecto con el cliente: galería, plano, vídeo y comentarios.
+- Enlace web para el cliente, con comentarios sobre cada render.
 - Recorrido en vídeo con Veo directamente desde el modo automático.
