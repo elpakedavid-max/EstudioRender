@@ -11,6 +11,11 @@ create table if not exists public.projects (
 
 alter table public.projects enable row level security;
 
+-- Acceso desde la API solo para usuarios con sesión (RLS limita a sus propios proyectos)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.projects to authenticated;
+revoke all on public.projects from anon;
+
 drop policy if exists "projects_owner" on public.projects;
 create policy "projects_owner" on public.projects
   for all using (owner = auth.uid()) with check (owner = auth.uid());
