@@ -12,6 +12,7 @@ App (PWA) para arquitectos e interioristas: de las fotos y las medidas de una ha
    - **Productos reales**: cada pieza se puede vincular a un producto de IKEA, Leroy Merlin, Kave Home, Maisons du Monde, Zara Home, El Corte Inglés, Conforama, Sklum, Bauhaus, Roca, Porcelanosa, Amazon o Google Shopping, con enlace, precio y foto. La foto se usa como referencia en los renders, y los productos salen en la lista de compra (descargable en CSV) y en la presentación con el total.
    - Habitación rectangular de un solo trazo, grosor de muros (tabique, muro, muro de carga), puertas con bisagra y sentido de apertura invertibles.
    - Herramientas de dibujo: lápiz, línea, flecha, zona, círculo, cota con medida, medir distancias y notas de texto, con colores, discontinuas y relleno.
+   - **Tiradores** para estirar muebles y zonas desde sus esquinas y lados, girar con el punto superior, alargar paredes, líneas y cotas desde sus extremos y ensanchar puertas y ventanas, todo sin escribir medidas (se muestra la medida mientras se estira).
    - Imán activable (ajuste a 5 cm y a paredes), giro libre de muebles de 15° en 15°, duplicar, y atajos de teclado (Ctrl+Z/Y, Supr, Ctrl+D, flechas, Esc).
    - Con Apple Pencil, el dedo sirve para moverse y hacer zoom.
    - Deshacer y rehacer, y descarga del plano en PNG.

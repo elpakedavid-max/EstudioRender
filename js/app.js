@@ -264,7 +264,7 @@ const TOOLS = [
   ['ink', '✎', 'Lápiz'], ['line', '╱', 'Línea'], ['arrow', '➚', 'Flecha'], ['rect', '▢', 'Zona'], ['circle', '◯', 'Círculo'], ['dim', '↔', 'Cota'], ['measure', '📏', 'Medir'], ['text', 'T', 'Texto'], ['erase', '⌫', 'Borrar'],
 ];
 const HINTS = {
-  select: 'Toca un elemento para editarlo o arrástralo. Arrastra el fondo para moverte; pellizca para hacer zoom.',
+  select: 'Toca un elemento y arrástralo para moverlo. Estira desde los puntos naranjas para cambiar su tamaño y gíralo con el punto de arriba. Arrastra el fondo para moverte y pellizca para hacer zoom.',
   wall: 'Dibuja una línea: se endereza sola, se ajusta a 5 cm y se une a otras paredes.',
   door: 'Toca sobre una pared para poner una puerta.', window: 'Toca sobre una pared para poner una ventana.',
   sliding: 'Toca sobre una pared para poner una puerta corredera.', entry: 'Toca sobre una pared para marcar la entrada.',

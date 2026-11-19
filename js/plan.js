@@ -186,6 +186,7 @@ const PLAN_CSS = `
 .ink.selected{stroke:#D85A30 !important}
 .shape.selected line:not(.hit),.shape.selected rect,.shape.selected circle,.shape.selected path{stroke:#D85A30 !important}
 .shape rect,.shape circle{pointer-events:all}
+.handle,.handle-hit{cursor:grab}.handle.rot{cursor:alias}
 .textnote text{font-family:'Comic Sans MS','Segoe Print',cursive,sans-serif}
 .textnote.selected text{fill:#D85A30}
 text{font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
@@ -239,11 +240,12 @@ export class PlanEditor {
     this.penSeen = false;
     this.level = 'all';
     this.snapOn = true;
-    host.innerHTML = `<svg class="plan-svg" tabindex="0"><style>${PLAN_CSS}</style><g class="world"><g class="content"></g><g class="overlay"></g></g></svg>`;
+    host.innerHTML = `<svg class="plan-svg" tabindex="0"><style>${PLAN_CSS}</style><g class="world"><g class="content"></g><g class="handles"></g><g class="overlay"></g></g></svg>`;
     this.svg = host.querySelector('svg');
     this.world = host.querySelector('.world');
     this.content = host.querySelector('.content');
     this.overlay = host.querySelector('.overlay');
+    this.handles = host.querySelector('.handles');
     this.bind();
     this.render();
     requestAnimationFrame(() => this.fit());
@@ -259,7 +261,7 @@ export class PlanEditor {
   setTool(t, itemType = null) {
     this.tool = t; this.itemType = itemType;
     this.svg.dataset.tool = t;
-    if (t !== 'select') this.select(null);
+    if (t !== 'select') this.select(null); else this.renderHandles();
   }
 
   select(id) {
@@ -312,7 +314,100 @@ export class PlanEditor {
     this.applyTransform();
   }
 
-  applyTransform() { this.world.setAttribute('transform', `translate(${this.tx} ${this.ty}) scale(${this.k})`); }
+  applyTransform() { this.world.setAttribute('transform', `translate(${this.tx} ${this.ty}) scale(${this.k})`); this.renderHandles(); }
+
+  // --- tiradores para estirar, girar y mover extremos del elemento seleccionado
+  handlePoints() {
+    const s = this.getSelected(); if (!s || this.tool !== 'select') return [];
+    const o = s.obj;
+    if (s.kind === 'item') {
+      const c = { x: o.x + o.w / 2, y: o.y + o.d / 2 }, a = (o.rot || 0) * Math.PI / 180;
+      const W = (lx, ly) => ({ x: c.x + lx * Math.cos(a) - ly * Math.sin(a), y: c.y + lx * Math.sin(a) + ly * Math.cos(a) });
+      const pts = [];
+      for (const [h, hx, hy] of [['nw', -1, -1], ['n', 0, -1], ['ne', 1, -1], ['e', 1, 0], ['se', 1, 1], ['s', 0, 1], ['sw', -1, 1], ['w', -1, 0]]) pts.push({ h, ...W(hx * o.w / 2, hy * o.d / 2) });
+      pts.push({ h: 'rot', rot: true, ...W(0, -o.d / 2 - 34 / this.k), stem: W(0, -o.d / 2) });
+      return pts;
+    }
+    if (s.kind === 'wall') return [{ h: 'p1', x: o.x1, y: o.y1 }, { h: 'p2', x: o.x2, y: o.y2 }];
+    if (s.kind === 'opening') {
+      const w = this.plan.walls.find((x) => x.id === o.wallId); if (!w) return [];
+      const L = wallLen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
+      const cx = w.x1 + ux * L * o.t, cy = w.y1 + uy * L * o.t;
+      return [{ h: 'oa', x: cx - ux * o.w / 2, y: cy - uy * o.w / 2 }, { h: 'ob', x: cx + ux * o.w / 2, y: cy + uy * o.w / 2 }];
+    }
+    if (s.kind === 'note') {
+      if ('x1' in o) return [{ h: 'p1', x: o.x1, y: o.y1 }, { h: 'p2', x: o.x2, y: o.y2 }];
+      if (o.kind === 'rect') return [['nw', 0, 0], ['n', 0.5, 0], ['ne', 1, 0], ['e', 1, 0.5], ['se', 1, 1], ['s', 0.5, 1], ['sw', 0, 1], ['w', 0, 0.5]].map(([h, fx, fy]) => ({ h, x: o.x + o.w * fx, y: o.y + o.h * fy }));
+      if (o.kind === 'circle') return [{ h: 'r', x: o.cx + o.r, y: o.cy }];
+    }
+    return [];
+  }
+
+  renderHandles() {
+    if (!this.handles) return;
+    const pts = this.handlePoints();
+    const r = 9 / this.k, sw = 2 / this.k;
+    this.handles.innerHTML = pts.map((p) => (p.stem ? `<line x1="${p.stem.x}" y1="${p.stem.y}" x2="${p.x}" y2="${p.y}" stroke="#D85A30" stroke-width="${sw}"/>` : '')
+      + `<circle class="handle${p.rot ? ' rot' : ''}" data-h="${p.h}" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(p.rot ? r * 1.15 : r)}" fill="${p.rot ? '#D85A30' : '#fff'}" stroke="#D85A30" stroke-width="${sw}"/>`
+      + `<circle class="handle-hit" data-h="${p.h}" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(r * 2.4)}" fill="transparent"/>`).join('');
+  }
+
+  resizeTo(g, p) {
+    const s = this.getSelected(); if (!s) return;
+    const o = s.obj, O = g.orig, h = g.h;
+    if (s.kind === 'item') {
+      const c0 = { x: O.x + O.w / 2, y: O.y + O.d / 2 }, a = (O.rot || 0) * Math.PI / 180;
+      if (h === 'rot') {
+        let deg = Math.atan2(p.y - c0.y, p.x - c0.x) * 180 / Math.PI + 90;
+        deg = ((deg % 360) + 360) % 360;
+        const st = this.snapOn ? 15 : 1;
+        o.rot = (Math.round(deg / st) * st) % 360;
+        return;
+      }
+      const dx = p.x - c0.x, dy = p.y - c0.y;
+      const P = { x: dx * Math.cos(-a) - dy * Math.sin(-a), y: dx * Math.sin(-a) + dy * Math.cos(-a) };
+      const hx = h.includes('e') ? 1 : h.includes('w') ? -1 : 0, hy = h.includes('s') ? 1 : h.includes('n') ? -1 : 0;
+      const W = O.w / 2, D = O.d / 2;
+      let nw = O.w, nd = O.d, clx = 0, cly = 0;
+      if (hx) { const A = -hx * W; nw = Math.max(10, this.sn(Math.abs(P.x - A))); clx = A + Math.sign(P.x - A || hx) * nw / 2; }
+      if (hy) { const A = -hy * D; nd = Math.max(10, this.sn(Math.abs(P.y - A))); cly = A + Math.sign(P.y - A || hy) * nd / 2; }
+      const cx = c0.x + clx * Math.cos(a) - cly * Math.sin(a), cy = c0.y + clx * Math.sin(a) + cly * Math.cos(a);
+      o.w = nw; o.d = nd; o.x = Math.round(cx - nw / 2); o.y = Math.round(cy - nd / 2);
+    } else if (s.kind === 'wall') {
+      const fixed = h === 'p1' ? { x: O.x2, y: O.y2 } : { x: O.x1, y: O.y1 };
+      const np = this.straighten(fixed, p);
+      const old = h === 'p1' ? { x: O.x1, y: O.y1 } : { x: O.x2, y: O.y2 };
+      if (h === 'p1') { o.x1 = np.x; o.y1 = np.y; } else { o.x2 = np.x; o.y2 = np.y; }
+      for (const w of this.plan.walls) {
+        if (w.id === o.id) continue;
+        const ow = g.others[w.id];
+        if (ow.x1 === old.x && ow.y1 === old.y) { w.x1 = np.x; w.y1 = np.y; }
+        if (ow.x2 === old.x && ow.y2 === old.y) { w.x2 = np.x; w.y2 = np.y; }
+      }
+    } else if (s.kind === 'opening') {
+      const w = this.plan.walls.find((x) => x.id === o.wallId); if (!w) return;
+      const L = wallLen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
+      const tp = ((p.x - w.x1) * ux + (p.y - w.y1) * uy);
+      const c = O.t * L, A = h === 'oa' ? c + O.w / 2 : c - O.w / 2;
+      const width = Math.max(30, Math.min(L, this.sn(Math.abs(tp - A))));
+      const mid = h === 'oa' ? A - width / 2 : A + width / 2;
+      o.w = width; o.t = Math.max(width / 2 / L, Math.min(1 - width / 2 / L, mid / L));
+    } else if (s.kind === 'note') {
+      if ('x1' in O) {
+        const fixed = h === 'p1' ? { x: O.x2, y: O.y2 } : { x: O.x1, y: O.y1 };
+        const np = this.straighten(fixed, p);
+        if (h === 'p1') { o.x1 = np.x; o.y1 = np.y; } else { o.x2 = np.x; o.y2 = np.y; }
+      } else if (o.kind === 'rect') {
+        const q = this.snapPoint(p);
+        let x0 = O.x, y0 = O.y, x1 = O.x + O.w, y1 = O.y + O.h;
+        if (h.includes('w')) x0 = q.x; if (h.includes('e')) x1 = q.x;
+        if (h.includes('n')) y0 = q.y; if (h.includes('s')) y1 = q.y;
+        o.x = Math.min(x0, x1); o.y = Math.min(y0, y1); o.w = Math.max(10, Math.abs(x1 - x0)); o.h = Math.max(10, Math.abs(y1 - y0));
+      } else if (o.kind === 'circle') {
+        o.r = Math.max(5, this.sn(Math.hypot(p.x - O.cx, p.y - O.cy)));
+      }
+    }
+  }
 
   fit() {
     const r = this.svg.getBoundingClientRect();
@@ -438,6 +533,14 @@ export class PlanEditor {
     const target = e.target.closest('[data-id]');
     const t = this.tool;
 
+    const hd = e.target.closest && e.target.closest('[data-h]');
+    if (t === 'select' && hd && this.selectedId) {
+      const sel = this.getSelected();
+      this.snapshot();
+      const others = {}; this.plan.walls.forEach((w) => { others[w.id] = { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 }; });
+      this.gesture = { mode: 'resize', h: hd.dataset.h, orig: JSON.parse(JSON.stringify(sel.obj)), others, moved: false };
+      return;
+    }
     if (t === 'select') {
       if (target) {
         const id = target.dataset.id; const kind = target.dataset.kind;
@@ -479,6 +582,19 @@ export class PlanEditor {
       g.last = { x: e.clientX, y: e.clientY }; this.applyTransform(); return;
     }
     const p = this.toWorld(e.clientX, e.clientY);
+    if (g.mode === 'resize') {
+      g.moved = true;
+      this.resizeTo(g, p);
+      this.render();
+      const s = this.getSelected();
+      if (s && s.kind === 'item') this.flashSize(`${s.obj.w} × ${s.obj.d} cm${s.obj.rot ? ` · ${s.obj.rot}°` : ''}`, p);
+      else if (s && s.kind === 'wall') this.flashSize(`${fmtM(wallLen(s.obj))} m`, p);
+      else if (s && s.kind === 'opening') this.flashSize(`${s.obj.w} cm`, p);
+      else if (s && 'x1' in s.obj) this.flashSize(`${fmtM(Math.hypot(s.obj.x2 - s.obj.x1, s.obj.y2 - s.obj.y1))} m`, p);
+      else if (s && s.obj.kind === 'rect') this.flashSize(`${s.obj.w} × ${s.obj.h} cm`, p);
+      else if (s && s.obj.kind === 'circle') this.flashSize(`Ø ${s.obj.r * 2} cm`, p);
+      return;
+    }
     if (g.mode === 'drag') {
       const dx = this.sn(p.x - g.start.x), dy = this.sn(p.y - g.start.y);
       if (!dx && !dy && !g.moved) return;
@@ -569,6 +685,11 @@ export class PlanEditor {
     this.overlay.innerHTML = '';
     if (cancelled) return;
     const p = this.toWorld(e.clientX, e.clientY);
+    if (g.mode === 'resize') {
+      if (g.moved) this.changed(); else this.undoStack.pop();
+      this.onSelect(this.getSelected());
+      return;
+    }
     if (g.mode === 'drag' || g.mode === 'dragwall') {
       this.plan.walls.forEach((w) => { delete w._ox1; delete w._oy1; delete w._ox2; delete w._oy2; });
       if (g.moved) this.changed(); else this.undoStack.pop();
@@ -645,6 +766,11 @@ export class PlanEditor {
     this.snapshot();
     this.plan.notes.push({ id: uid(), kind: 'text', x: Math.round(p.x), y: Math.round(p.y), text, color: '#185FA5', size: 20 });
     this.changed();
+  }
+
+  flashSize(text, p) {
+    const fs = 15 / this.k;
+    this.overlay.innerHTML = `<g><rect x="${p.x + 14 / this.k}" y="${p.y - 34 / this.k}" width="${(text.length * 8.4 + 14) / this.k}" height="${24 / this.k}" rx="${6 / this.k}" fill="#1f1f1d" opacity=".85"/><text x="${p.x + 21 / this.k}" y="${p.y - 17 / this.k}" font-size="${fs}" fill="#fff">${text}</text></g>`;
   }
 
   flash(msg) { this.host.dispatchEvent(new CustomEvent('flash', { detail: msg })); }
