@@ -99,6 +99,10 @@ const DEFAULT_SETTINGS = {
   apiKey: '',                // clave de Gemini (modo automático, directo)
   proxyUrl: '',              // URL de la función de Supabase (alternativa segura a la clave)
   proxyToken: '',            // anon key de Supabase
+  provider: 'gemini',        // 'gemini' | 'openai' (modo automático)
+  openaiKey: '',             // clave de la API de OpenAI (ChatGPT Images)
+  openaiModel: 'gpt-image-2',
+  openaiQuality: 'high',     // low | medium | high
   imageModel: 'gemini-3-pro-image',
   textModel: 'gemini-3-flash-preview',
   studioName: '',

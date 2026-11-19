@@ -13,7 +13,7 @@ App (PWA) para arquitectos e interioristas: de las fotos y las medidas de una ha
    - Deshacer y rehacer, y descarga del plano en PNG.
 3. **Renders**, con dos modos que se eligen en Ajustes:
    - **Manual (sin coste)**: genera el prompt a partir de la ficha y del plano, y comparte la foto y el plano con Gemini o ChatGPT. El resultado se sube a la galería.
-   - **Automático (API de Gemini)**: genera el render dentro de la app, aplica correcciones pidiendo un cambio cada vez y propone la distribución con IA leyendo la ficha y las notas a mano.
+   - **Automático (API de Gemini o de OpenAI / ChatGPT Images)**: genera el render dentro de la app, aplica correcciones pidiendo un cambio cada vez y propone la distribución con IA leyendo la ficha y las notas a mano.
    - Vistas: desde la entrada, desde el fondo (con izquierda y derecha invertidas en el prompt), laterales, aérea o libre. Admite un render anterior como referencia de estilo para que las vistas cuadren entre sí.
 4. **Vídeo**:
    - Montaje en el propio dispositivo con los renders elegidos, movimientos de cámara suaves, rótulos, el plano y música generada sin derechos, en horizontal 16:9 o vertical 9:16.
@@ -56,6 +56,10 @@ Modelos por defecto, que se pueden cambiar en Ajustes:
 
 - Imagen: `gemini-3-pro-image` (Nano Banana Pro). Una alternativa más rápida y barata es `gemini-3.1-flash-image`.
 - Texto (propuesta de distribución): `gemini-3-flash-preview`.
+
+### Con ChatGPT (OpenAI)
+
+En Ajustes → *Automático* → *ChatGPT Images (OpenAI)*, pegar una clave de platform.openai.com (de pago por uso y aparte de ChatGPT Plus). Usa `gpt-image-2` con `/v1/images/edits`, enviando la foto, el plano y la referencia como imágenes. La calidad se puede elegir: baja para pruebas y alta para el cliente.
 
 ## Estructura
 

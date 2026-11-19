@@ -2,7 +2,7 @@ import * as db from './db.js';
 import { ROOM_TYPES, CATALOG } from './catalog.js';
 import { PlanEditor, emptyPlan, planPNG, fmtM } from './plan.js';
 import { renderPrompt, editPrompt, videoPrompt, VIEWS, STYLES, LIGHTS, CAMERA_MOVES } from './prompt.js';
-import { generateImage, proposeLayout, autoReady } from './ai.js';
+import { generateImage, proposeLayout, autoReady, layoutReady, providerLabel } from './ai.js';
 import { buildTimeline, drawFrame, recordVideo } from './video.js';
 import { buildPresentation } from './present.js';
 import * as sync from './sync.js';
@@ -339,14 +339,14 @@ function renderSide() {
   }
   side.onclick = null;
   if (sel) return renderInspector(side, sel);
-  const auto = autoReady();
+  const auto = layoutReady();
   const pl = current.plan;
   side.innerHTML = `<h3>Plano</h3>
     <p class="muted small">${pl.walls.length} paredes · ${pl.openings.length} huecos · ${pl.items.length} piezas · ${pl.notes.length} notas</p>
     <p class="small">Arriba es el <b>fondo</b> y abajo la <b>entrada</b>. Así se describe luego a la IA (izquierda y derecha mirando desde la entrada).</p>
     <div class="row" style="flex-direction:column;align-items:stretch">
       <button class="btn" id="reset-room">Rehacer contorno ${fmtM(current.width)} × ${fmtM(current.length)} m</button>
-      ${auto ? '<button class="btn primary" id="ai-layout">Propuesta de distribución con IA</button>' : '<p class="muted small">Con el modo automático activado (Ajustes) la IA puede proponer la distribución leyendo tu ficha y tus notas a mano.</p>'}
+      ${auto ? '<button class="btn primary" id="ai-layout">Propuesta de distribución con IA</button>' : '<p class="muted small">Con el modo automático y una clave de Gemini (Ajustes), la IA puede proponer la distribución leyendo tu ficha y tus notas a mano.</p>'}
       <a class="btn dark" href="#p/${current.id}/render">Siguiente: renders →</a>
     </div>`;
   $('#reset-room').onclick = async () => {
@@ -434,7 +434,7 @@ async function renderRenders() {
   view.innerHTML = `<div class="page">
     <div class="mode-banner ${auto ? 'auto' : ''}">
       <b>${auto ? 'Modo automático' : 'Modo manual'}</b>
-      <span class="small">${auto ? `Los renders se generan aquí con ${esc(s.imageModel)}.` : 'Preparo el prompt y el plano; tú los pegas en Gemini o ChatGPT y subes aquí el resultado.'}</span>
+      <span class="small">${auto ? `Los renders se generan aquí con ${esc(providerLabel())}.` : 'Preparo el prompt y el plano; tú los pegas en Gemini o ChatGPT y subes aquí el resultado.'}</span>
       <button class="btn" id="chg-mode" style="margin-left:auto">Cambiar modo</button>
     </div>
     <div class="split">
@@ -673,8 +673,20 @@ function openSettings() {
   const d = dialog(`<form class="dlg" method="dialog"><h3>Ajustes</h3>
     <div class="field"><label>Modo de render</label>
       <div class="chips"><label class="chip ${s.mode === 'manual' ? 'on' : ''}"><input type="radio" name="mode" value="manual" ${s.mode === 'manual' ? 'checked' : ''} hidden> Manual (Gemini / ChatGPT, sin coste)</label>
-      <label class="chip ${s.mode === 'auto' ? 'on' : ''}"><input type="radio" name="mode" value="auto" ${s.mode === 'auto' ? 'checked' : ''} hidden> Automático (API de Gemini)</label></div></div>
+      <label class="chip ${s.mode === 'auto' ? 'on' : ''}"><input type="radio" name="mode" value="auto" ${s.mode === 'auto' ? 'checked' : ''} hidden> Automático (Gemini o ChatGPT)</label></div></div>
     <div id="auto-opts" ${s.mode === 'auto' ? '' : 'hidden'}>
+      <div class="field"><label>Servicio para los renders</label>
+        <div class="chips"><label class="chip ${s.provider !== 'openai' ? 'on' : ''}"><input type="radio" name="provider" value="gemini" ${s.provider !== 'openai' ? 'checked' : ''} hidden> Gemini (Nano Banana)</label>
+        <label class="chip ${s.provider === 'openai' ? 'on' : ''}"><input type="radio" name="provider" value="openai" ${s.provider === 'openai' ? 'checked' : ''} hidden> ChatGPT Images (OpenAI)</label></div></div>
+      <div id="openai-opts" ${s.provider === 'openai' ? '' : 'hidden'}>
+        <div class="field"><label>Clave de API de OpenAI</label><input name="openaiKey" type="password" value="${esc(s.openaiKey)}" placeholder="sk-…" autocomplete="off">
+          <span class="muted small">Se crea en platform.openai.com → API keys. Es de pago por uso y va aparte de la suscripción ChatGPT Plus. Se guarda solo en este dispositivo.</span></div>
+        <div class="form">
+          <div class="field"><label>Modelo</label><input name="openaiModel" value="${esc(s.openaiModel)}"></div>
+          <div class="field"><label>Calidad</label><select name="openaiQuality">${[['low', 'Baja (pruebas, muy barata)'], ['medium', 'Media'], ['high', 'Alta (para el cliente)']].map(([k, v]) => `<option value="${k}" ${s.openaiQuality === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+        </div>
+        <p class="muted small">La propuesta automática de distribución usa Gemini: si quieres esa función, añade también la clave de Gemini.</p>
+      </div>
       <div class="field"><label>Clave de API de Gemini</label><input name="apiKey" type="password" value="${esc(s.apiKey)}" placeholder="AIza…" autocomplete="off">
         <span class="muted small">Se guarda solo en este dispositivo. Consíguela en aistudio.google.com. Alternativa más segura: la función de Supabase (abajo).</span></div>
       <div class="form">
@@ -698,6 +710,7 @@ function openSettings() {
   f.onchange = () => {
     $$('.chip', f).forEach((c) => c.classList.toggle('on', $('input', c).checked));
     $('#auto-opts', f).hidden = f.elements.mode.value !== 'auto';
+    $('#openai-opts', f).hidden = f.elements.provider.value !== 'openai';
   };
   const keepSync = () => { const n = db.getSettings(); n.supabaseUrl = f.elements.supabaseUrl.value.trim(); n.supabaseAnon = f.elements.supabaseAnon.value.trim(); db.setSettings(n); };
   const authAct = async (fn, okMsg) => {
@@ -717,10 +730,12 @@ function openSettings() {
   d.onclose = () => {
     if (d.returnValue !== 'ok') return;
     const n = { ...db.getSettings() };
-    ['apiKey', 'imageModel', 'textModel', 'proxyUrl', 'proxyToken', 'studioName', 'supabaseUrl', 'supabaseAnon'].forEach((k) => (n[k] = f.elements[k].value.trim()));
+    ['apiKey', 'imageModel', 'textModel', 'proxyUrl', 'proxyToken', 'studioName', 'supabaseUrl', 'supabaseAnon', 'openaiKey', 'openaiModel', 'openaiQuality'].forEach((k) => (n[k] = f.elements[k].value.trim()));
+    n.provider = f.elements.provider.value;
     n.mode = f.elements.mode.value;
     db.setSettings(n);
-    toast(n.mode === 'auto' && !n.apiKey && !n.proxyUrl ? 'Modo automático: falta la clave de Gemini' : 'Ajustes guardados');
+    const missing = n.mode === 'auto' && (n.provider === 'openai' ? !n.openaiKey : !n.apiKey && !n.proxyUrl);
+    toast(missing ? `Modo automático: falta la clave de ${n.provider === 'openai' ? 'OpenAI' : 'Gemini'}` : 'Ajustes guardados');
     route();
   };
 }

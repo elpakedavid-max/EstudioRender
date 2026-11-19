@@ -6,7 +6,60 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export function autoReady() {
   const s = getSettings();
-  return s.mode === 'auto' && (s.apiKey || s.proxyUrl);
+  if (s.mode !== 'auto') return false;
+  if (s.provider === 'openai') return !!s.openaiKey;
+  return !!(s.apiKey || s.proxyUrl);
+}
+
+// La propuesta de distribución usa Gemini (texto); disponible si hay clave de Gemini
+export function layoutReady() {
+  const s = getSettings();
+  return s.mode === 'auto' && !!(s.apiKey || s.proxyUrl);
+}
+
+export function providerLabel() {
+  const s = getSettings();
+  return s.provider === 'openai' ? `ChatGPT Images (${s.openaiModel})` : `Gemini (${s.imageModel})`;
+}
+
+// --- OpenAI (ChatGPT Images): /v1/images/edits con varias imágenes de referencia
+const OPENAI_SIZES = { '16:9': '1536x1024', '9:16': '1024x1536', '1:1': '1024x1024' };
+async function openaiImage(prompt, images, aspectRatio) {
+  const s = getSettings();
+  const size = OPENAI_SIZES[aspectRatio] || '1536x1024';
+  let res;
+  try {
+    if (images.length) {
+      const fd = new FormData();
+      fd.append('model', s.openaiModel || 'gpt-image-2');
+      fd.append('prompt', prompt);
+      fd.append('size', size);
+      fd.append('quality', s.openaiQuality || 'high');
+      for (let i = 0; i < images.length; i++) {
+        const b = await shrink(images[i]);
+        fd.append('image[]', new File([b], `ref-${i + 1}.${(b.type || '').includes('png') ? 'png' : 'jpg'}`, { type: b.type || 'image/jpeg' }));
+      }
+      res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${s.openaiKey}` }, body: fd });
+    } else {
+      res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${s.openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: s.openaiModel || 'gpt-image-2', prompt, size, quality: s.openaiQuality || 'high' }),
+      });
+    }
+  } catch (e) {
+    throw new Error('No hay conexión con OpenAI. Revisa internet o la clave.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || `Error ${res.status} de OpenAI`);
+  const b64 = data?.data?.[0]?.b64_json;
+  if (!b64) {
+    if (data?.data?.[0]?.url) return await (await fetch(data.data[0].url)).blob();
+    throw new Error('OpenAI no devolvió ninguna imagen.');
+  }
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: 'image/png' });
 }
 
 export async function blobToBase64(blob) {
@@ -71,6 +124,7 @@ async function imagePart(blob) {
 // Genera o edita una imagen. images: array de Blob en el orden que cita el prompt.
 export async function generateImage(prompt, images = [], aspectRatio = '16:9') {
   const s = getSettings();
+  if (s.provider === 'openai') return openaiImage(prompt, images, aspectRatio);
   const parts = [{ text: prompt }];
   for (const b of images) parts.push(await imagePart(b));
   const body = {
