@@ -91,7 +91,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; text-align:
       <p class="lead">Haz una foto del espacio, dibuja el plano con el lápiz del iPad, elige muebles reales de tienda y enséñale al cliente cómo quedará en minutos, no en días.</p>
       <div class="ctas">
         <a class="btn primary" href="../?ejemplo">Ver un proyecto de ejemplo</a>
-        <a class="btn" href="#video">▶ Ver el vídeo (1 min)</a>
+        <a class="btn" href="#video" id="ver-video">▶ Ver el vídeo en pantalla completa</a>
       </div>
     </div>
     <div class="video" id="video">
@@ -182,5 +182,14 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; text-align:
 </section>
 
 <footer>EstudioRender · Las imágenes generadas son orientativas y pueden variar respecto al resultado final.</footer>
+<script>
+document.getElementById('ver-video').onclick = (e) => {
+  const v = document.querySelector('#video video'); if (!v) return;
+  const req = v.requestFullscreen || v.webkitRequestFullscreen || v.webkitEnterFullscreen;
+  if (!req) return; e.preventDefault();
+  try { const r = req.call(v); r && r.catch && r.catch(() => {}); } catch {}
+  v.play().catch(() => {});
+};
+</script>
 </body>
 </html>

@@ -58,12 +58,26 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:30px 20px 50p
 footer b{color:var(--ink);display:block;font-size:16px;margin-bottom:4px}
 .lb{position:fixed;inset:0;background:rgba(0,0,0,.94);display:none;align-items:center;justify-content:center;z-index:9}
 .lb.on{display:flex}.lb img{max-width:100vw;max-height:100vh}
+
+.fsbtn{display:inline-flex;align-items:center;gap:8px;margin-top:18px;background:#fff;color:var(--ink);border:0;border-radius:999px;padding:12px 20px;font:600 16px inherit;font-family:inherit;cursor:pointer}
+.ss{position:fixed;inset:0;background:#000;z-index:20;display:none;color:#fff;user-select:none;-webkit-user-select:none;touch-action:pan-y}
+.ss.on{display:block}.ss .sl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .6s}
+.ss .sl.cur{opacity:1}.ss .sl img{max-width:100%;max-height:100%;object-fit:contain}.ss .sl.plan{background:#fff}
+.ss .cap{position:absolute;left:0;right:0;bottom:0;padding:40px 6vw 28px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:clamp(16px,2.2vw,24px);text-align:center}
+.ss .sl.plan .cap{display:none}
+.ss .cover{flex-direction:column;text-align:center;background:#111 center/cover}.ss .cover::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.ss .cover>*{position:relative}.ss .cover h1{font-size:clamp(36px,7vw,80px);margin:10px 0}.ss .cover small{letter-spacing:.14em;text-transform:uppercase;opacity:.85}
+.ss .ctl{position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:3;transition:opacity .4s}.ss.idle .ctl,.ss.idle .nav{opacity:0}
+.ss button{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:999px;min-width:46px;height:46px;font-size:20px;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.ss .nav{position:absolute;top:50%;transform:translateY(-50%);z-index:3;transition:opacity .4s}.ss .prev{left:14px}.ss .next{right:14px}
+.ss .dots{position:absolute;bottom:10px;left:0;right:0;text-align:center;z-index:3;font-size:13px;opacity:.7}
 @media(min-width:900px){.gallery{grid-template-columns:1fr 1fr}.gallery figure:first-child{grid-column:1/-1}}
 </style></head><body>
 <header class="hero" style="background-image:url('${hero}')"><div class="in">
 <small>${esc(studio || 'Propuesta de reforma')}</small>
 <h1>${esc(project.name)}</h1>
-<p>${project.client ? `Para ${esc(project.client)} · ` : ''}${esc(date)}</p></div></header>
+<p>${project.client ? `Para ${esc(project.client)} · ` : ''}${esc(date)}</p>
+${imgs.length ? '<button class="fsbtn" id="fs-open">⛶ Ver en pantalla completa</button>' : ''}</div></header>
 <main>
 ${project.description ? `<p class="lead">${esc(project.description)}</p>` : ''}
 ${facts.length ? `<div class="facts">${facts.map(([k, v]) => `<div class="fact"><b>${esc(k)}</b>${esc(v)}</div>`).join('')}</div>` : ''}
@@ -74,9 +88,35 @@ ${plan ? `<h2>Distribución</h2><div class="plan"><img src="${plan}" alt="Plano"
 </main>
 <footer><b>${esc(studio || '')}</b>Propuesta orientativa: las imágenes son una recreación y pueden variar respecto al resultado final.</footer>
 <div class="lb" id="lb"><img alt=""></div>
+<div class="ss" id="ss">
+<div class="sl cover" style="background-image:url('${hero}')"><small>${esc(studio || 'Propuesta de reforma')}</small><h1>${esc(project.name)}</h1><p>${project.client ? `Para ${esc(project.client)}` : esc(date)}</p></div>
+${imgs.map((im) => `<div class="sl"><img src="${im.src}" alt="">${im.caption ? `<div class="cap">${esc(im.caption)}</div>` : ''}</div>`).join('')}
+${plan ? `<div class="sl plan"><img src="${plan}" alt="Plano"></div>` : ''}
+<div class="ctl"><button id="ss-play" title="Pase automático">▶</button><button id="ss-close" title="Salir">✕</button></div>
+<button class="nav prev" id="ss-prev" aria-label="Anterior">‹</button><button class="nav next" id="ss-next" aria-label="Siguiente">›</button>
+<div class="dots" id="ss-dots"></div></div>
 <script>
 const lb=document.getElementById('lb');
 document.querySelectorAll('figure img,.plan img').forEach(i=>i.onclick=()=>{lb.firstElementChild.src=i.src;lb.classList.add('on')});
 lb.onclick=()=>lb.classList.remove('on');
+(()=>{const ss=document.getElementById('ss');if(!ss)return;const sl=[...ss.querySelectorAll('.sl')];let i=0,timer=null,idle=null;
+const show=n=>{i=(n+sl.length)%sl.length;sl.forEach((x,k)=>x.classList.toggle('cur',k===i));document.getElementById('ss-dots').textContent=(i+1)+' / '+sl.length};
+const wake=()=>{ss.classList.remove('idle');clearTimeout(idle);idle=setTimeout(()=>ss.classList.add('idle'),2500)};
+const play=on=>{clearInterval(timer);timer=on?setInterval(()=>show(i+1),5000):null;document.getElementById('ss-play').textContent=on?'❚❚':'▶'};
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+const open=()=>{ss.classList.add('on');show(0);wake();const r=ss.requestFullscreen||ss.webkitRequestFullscreen;if(r)try{const p=r.call(ss);p&&p.catch&&p.catch(()=>{})}catch(e){}};
+const close=()=>{play(false);if(parent!==window)parent.postMessage('er-close-presentation','*');ss.classList.remove('on');if(fsEl())(document.exitFullscreen||document.webkitExitFullscreen).call(document)};
+document.getElementById('fs-open').onclick=open;
+document.getElementById('ss-close').onclick=e=>{e.stopPropagation();close()};
+document.getElementById('ss-play').onclick=e=>{e.stopPropagation();play(!timer)};
+document.getElementById('ss-prev').onclick=e=>{e.stopPropagation();show(i-1);wake()};
+document.getElementById('ss-next').onclick=e=>{e.stopPropagation();show(i+1);wake()};
+ss.onclick=e=>{wake();show(e.clientX<innerWidth/3?i-1:i+1)};ss.onmousemove=wake;
+let x0=null;ss.addEventListener('touchstart',e=>{x0=e.touches[0].clientX},{passive:true});
+ss.addEventListener('touchend',e=>{if(x0==null)return;const dx=e.changedTouches[0].clientX-x0;x0=null;if(Math.abs(dx)>40){e.preventDefault();show(dx<0?i+1:i-1);wake()}});
+addEventListener('keydown',e=>{if(!ss.classList.contains('on'))return;if(e.key==='ArrowRight'||e.key===' ')show(i+1);else if(e.key==='ArrowLeft')show(i-1);else if(e.key==='Escape')close();wake()});
+const onfs=()=>{if(!fsEl()&&ss.classList.contains('on')&&ss.dataset.fs)close();ss.dataset.fs=fsEl()?'1':''};
+document.addEventListener('fullscreenchange',onfs);document.addEventListener('webkitfullscreenchange',onfs);
+if(location.hash==='#presentar'){ss.classList.add('on');show(0);wake()}})();
 </script></body></html>`;
 }

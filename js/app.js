@@ -673,7 +673,8 @@ async function renderVideo() {
       <h3>Presentación para el cliente</h3>
       <p class="muted small">Un único archivo con los renders elegidos, el plano y los datos del proyecto. Se abre en cualquier móvil sin instalar nada: envíalo por WhatsApp o email.</p>
       <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="p-video" ${vstate.withVideo ? 'checked' : ''} ${vstate.lastVideo ? '' : 'disabled'}> Incluir el vídeo ${vstate.lastVideo ? `(${(vstate.lastVideo.size / 1e6).toFixed(1)} MB)` : '(crea primero el vídeo)'}</label>
-      <div class="row" style="margin-top:10px"><button class="btn dark" id="p-make" ${p.renders.length ? '' : 'disabled'}>Crear presentación</button></div>
+      <div class="row" style="margin-top:10px"><button class="btn dark" id="p-make" ${p.renders.length ? '' : 'disabled'}>Crear presentación</button><button class="btn" id="p-full" ${p.renders.length ? '' : 'disabled'}>⛶ Ver en pantalla completa</button></div>
+      <p class="muted small">En pantalla completa: desliza o toca a los lados para pasar, ▶ para pase automático y ✕ para salir. El cliente también tiene el botón al abrir el archivo.</p>
     </div>
     <div>
       <canvas id="v-canvas" class="video-stage ${vstate.vertical ? 'vertical' : ''}" width="${vstate.vertical ? 1080 : 1920}" height="${vstate.vertical ? 1920 : 1080}"></canvas>
@@ -703,24 +704,54 @@ async function renderVideo() {
     const text = '\ufeff' + rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
     download(new Blob([text], { type: 'text/csv' }), `${slug(p.name)}-lista-de-compra.csv`);
   };
+  const makeHTML = async () => {
+    const slides = [];
+    for (const id of vstate.picked) { const r = p.renders.find((x) => x.id === id); slides.push({ blob: await db.getFile(r.fileId), caption: r.caption }); }
+    return buildPresentation({
+      project: p, slides, studio: s.studioName, roomLabel: ROOM_TYPES[p.roomType],
+      size: `${fmtM(p.width)} × ${fmtM(p.length)} m${p.width && p.length ? ` (${Math.round(p.width * p.length / 1e4)} m²)` : ''}`,
+      planBlob: vstate.plan && p.plan ? await planPNG(p.plan, { title: p.name, subtitle: `${fmtM(p.width)} × ${fmtM(p.length)} m` }) : null,
+      videoBlob: vstate.withVideo ? vstate.lastVideo : null,
+      products: await Promise.all(productItems(p).map(async (it) => ({ label: it.label, ...it.product, storeLabel: storeName(it.product.store), blob: it.product.fileId ? await db.getFile(it.product.fileId) : null }))),
+    });
+  };
   $('#p-make').onclick = async (e) => {
     if (!vstate.picked.length) return toast('Elige al menos un render');
     const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner"></span> Preparando…';
     try {
-      const slides = [];
-      for (const id of vstate.picked) { const r = p.renders.find((x) => x.id === id); slides.push({ blob: await db.getFile(r.fileId), caption: r.caption }); }
-      const html = await buildPresentation({
-        project: p, slides, studio: s.studioName, roomLabel: ROOM_TYPES[p.roomType],
-        size: `${fmtM(p.width)} × ${fmtM(p.length)} m${p.width && p.length ? ` (${Math.round(p.width * p.length / 1e4)} m²)` : ''}`,
-        planBlob: vstate.plan && p.plan ? await planPNG(p.plan, { title: p.name, subtitle: `${fmtM(p.width)} × ${fmtM(p.length)} m` }) : null,
-        videoBlob: vstate.withVideo ? vstate.lastVideo : null,
-        products: await Promise.all(productItems(p).map(async (it) => ({ label: it.label, ...it.product, storeLabel: storeName(it.product.store), blob: it.product.fileId ? await db.getFile(it.product.fileId) : null }))),
-      });
+      const html = await makeHTML();
       const file = new File([html], `${slug(p.name)}-propuesta.html`, { type: 'text/html' });
       if (!(await shareFiles([file], p.name))) download(file, file.name);
       toast('Presentación lista');
     } catch (err) { toast('No se pudo crear: ' + err.message, 6000); }
     b.disabled = false; b.textContent = 'Crear presentación';
+  };
+  $('#p-full').onclick = async () => {
+    if (!vstate.picked.length) return toast('Elige al menos un render');
+    // La pantalla completa se pide en el mismo toque; la presentación se carga después.
+    const ov = document.createElement('div');
+    ov.className = 'present-overlay';
+    ov.innerHTML = '<div class="present-loading"><span class="spinner"></span> Preparando presentación…</div>';
+    document.body.append(ov);
+    const req = ov.requestFullscreen || ov.webkitRequestFullscreen;
+    if (req) { try { const r = req.call(ov); r && r.catch && r.catch(() => {}); } catch {} }
+    let url = null;
+    const close = () => {
+      removeEventListener('message', onMsg); document.removeEventListener('fullscreenchange', onFs); document.removeEventListener('webkitfullscreenchange', onFs);
+      if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      ov.remove(); if (url) URL.revokeObjectURL(url);
+    };
+    const onMsg = (e) => { if (e.data === 'er-close-presentation') close(); };
+    const onFs = () => { if (!(document.fullscreenElement || document.webkitFullscreenElement) && ov.isConnected && ov.dataset.fs) close(); ov.dataset.fs = (document.fullscreenElement || document.webkitFullscreenElement) ? '1' : ''; };
+    addEventListener('message', onMsg); document.addEventListener('fullscreenchange', onFs); document.addEventListener('webkitfullscreenchange', onFs);
+    try {
+      const html = await makeHTML();
+      url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      const fr = document.createElement('iframe');
+      fr.src = url + '#presentar'; fr.title = 'Presentación';
+      fr.onload = () => { ov.querySelector('.present-loading')?.remove(); fr.focus(); };
+      ov.append(fr);
+    } catch (err) { close(); toast('No se pudo abrir: ' + err.message, 6000); }
   };
   const canvas = $('#v-canvas');
 
