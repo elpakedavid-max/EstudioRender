@@ -51,8 +51,11 @@ export async function saveProject(p) {
   return p;
 }
 
+// Todos los archivos de un proyecto: fotos, renders, fotos de productos y vídeos.
+export const projectFileIds = (p) => [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean), ...(p.videos || []).map((v) => v.fileId)];
+
 export async function deleteProject(p) {
-  const ids = [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean)];
+  const ids = projectFileIds(p);
   await tx('files', 'readwrite', (s) => Promise.all(ids.map((id) => req2p(s.delete(id)))));
   await tx('projects', 'readwrite', (s) => req2p(s.delete(p.id)));
 }

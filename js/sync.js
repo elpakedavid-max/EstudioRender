@@ -65,13 +65,15 @@ async function api(path, { method = 'GET', body, headers = {}, raw = false } = {
   return txt ? JSON.parse(txt) : null;
 }
 
-const fileIds = (p) => [...(p.photos || []), ...(p.renders || []).map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean)];
+const fileIds = (p) => db.projectFileIds(p);
+export const MAX_SYNC_BYTES = 50e6; // límite por archivo del almacenamiento gratuito de Supabase
 
 async function uploadFiles(p, uploaded) {
   const uid = session().uid;
   for (const id of fileIds(p)) {
     if (uploaded[id]) continue;
     const blob = await db.getFile(id); if (!blob) continue;
+    if (blob.size > MAX_SYNC_BYTES) continue; // vídeos muy grandes: se quedan solo en este dispositivo
     await api(`/storage/v1/object/${BUCKET}/${uid}/${id}`, { method: 'POST', body: blob, headers: { 'x-upsert': 'true', 'Content-Type': blob.type || 'application/octet-stream' } });
     uploaded[id] = 1; ls.set(UPLOADED_KEY, uploaded);
   }
@@ -81,7 +83,8 @@ async function downloadFiles(p, uploaded) {
   const uid = session().uid;
   for (const id of fileIds(p)) {
     if (await db.getFile(id)) continue;
-    const r = await api(`/storage/v1/object/authenticated/${BUCKET}/${uid}/${id}`, { raw: true });
+    let r;
+    try { r = await api(`/storage/v1/object/authenticated/${BUCKET}/${uid}/${id}`, { raw: true }); } catch { continue; } // p. ej. un vídeo grande que no se subió
     await db.putFileWithId(id, await r.blob());
     uploaded[id] = 1;
   }

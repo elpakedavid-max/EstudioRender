@@ -194,6 +194,58 @@ async function newProject() {
   location.hash = `#p/${p.id}/ficha`;
 }
 
+// ---------- vídeos del proyecto (subidos de otras apps o creados aquí)
+const fmtMB = (n) => `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`;
+function finalVideoOf(p) { return (p.videos || []).find((v) => v.id === p.finalVideo) || null; }
+async function addVideos(files, { source = 'subido', makeFinal = false } = {}) {
+  current.videos ||= [];
+  let last = null;
+  for (const f of files) {
+    if (!f.type.startsWith('video/') && !/\.(mp4|mov|m4v|webm)$/i.test(f.name)) { toast(`"${f.name}" no es un vídeo`); continue; }
+    last = { id: db.uid(), fileId: await db.putFile(f), name: f.name.replace(/\.[^.]+$/, ''), size: f.size, source, createdAt: Date.now() };
+    current.videos.unshift(last);
+    if (f.size > sync.MAX_SYNC_BYTES) toast(`"${f.name}" pesa ${fmtMB(f.size)}: se guarda en este dispositivo, pero los vídeos de más de 50 MB no se sincronizan.`, 7000);
+  }
+  if (last && (makeFinal || !current.finalVideo)) current.finalVideo = last.id;
+  await db.saveProject(current);
+  return last;
+}
+async function videoCards(p) {
+  return Promise.all((p.videos || []).map(async (v) => `<div class="vcard ${v.id === p.finalVideo ? 'final' : ''}" data-vid="${v.id}">
+    <video src="${await db.fileURL(v.fileId)}#t=0.5" preload="metadata" playsinline muted></video>
+    ${v.id === p.finalVideo ? '<span class="tag">★ Vídeo final</span>' : ''}
+    <button class="x" data-vdel="${v.id}" aria-label="Quitar">×</button>
+    <div class="vmeta"><input data-vname="${v.id}" value="${esc(v.name)}" aria-label="Nombre del vídeo"><small>${v.source === 'app' ? 'Creado en EstudioRender' : 'Subido'} · ${fmtMB(v.size || 0)}</small>
+      <div class="row"><button class="btn small-btn" data-vplay="${v.id}">▶ Ver</button>${v.id === p.finalVideo ? '' : `<button class="btn small-btn" data-vfinal="${v.id}">★ Usar como final</button>`}</div></div></div>`));
+}
+function bindVideoCards(box, rerender) {
+  if (!box || box.dataset.bound) return;
+  box.dataset.bound = '1';
+  box.addEventListener('input', (e) => {
+    const id = e.target.dataset.vname; if (!id) return;
+    const v = current.videos.find((x) => x.id === id); if (v) { v.name = e.target.value; save(); }
+  });
+  box.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-vdel],[data-vfinal],[data-vplay]'); if (!t) return;
+    e.preventDefault();
+    if (t.dataset.vfinal) { current.finalVideo = t.dataset.vfinal; await db.saveProject(current); toast('Vídeo final elegido'); return rerender(); }
+    if (t.dataset.vplay) {
+      const v = current.videos.find((x) => x.id === t.dataset.vplay); if (!v) return;
+      const vid = box.querySelector(`[data-vid="${v.id}"] video`);
+      vid.muted = false; vid.controls = true;
+      const req = vid.requestFullscreen || vid.webkitRequestFullscreen || vid.webkitEnterFullscreen;
+      if (req) { try { const r = req.call(vid); r && r.catch && r.catch(() => {}); } catch {} }
+      vid.play().catch(() => {});
+      return;
+    }
+    const v = current.videos.find((x) => x.id === t.dataset.vdel); if (!v) return;
+    if (!(await confirmDlg(`¿Quitar el vídeo "${v.name}" del proyecto?`, 'Quitar'))) return;
+    current.videos = current.videos.filter((x) => x.id !== v.id);
+    if (current.finalVideo === v.id) current.finalVideo = current.videos[0]?.id || null;
+    await db.deleteFile(v.fileId); await db.saveProject(current); rerender();
+  });
+}
+
 // ---------- ficha
 async function renderFicha() {
   const p = current;
@@ -219,6 +271,9 @@ async function renderFicha() {
     <h3>Fotos del espacio actual</h3>
     <p class="muted small">La primera es la principal: se usa como base de la perspectiva de los renders. Toca una foto para hacerla principal.</p>
     <div class="photos">${photoHtml.join('')}<button class="addphoto" id="addphoto">+ Añadir fotos</button></div>
+    <h3>Vídeos</h3>
+    <p class="muted small">Sube vídeos hechos con otras aplicaciones (CapCut, Kling, Veo, el móvil…). Marca uno con ★ como <b>vídeo final</b>: es el que va en la presentación del cliente.</p>
+    <div class="videos" id="videos">${(await videoCards(p)).join('')}<button class="addphoto" id="addvideo">+ Añadir vídeo</button></div>
     <div class="row" style="margin-top:28px">
       <button class="btn primary" id="save-exit">Guardar y salir</button>
       <a class="btn dark" href="#p/${p.id}/plano">Siguiente: plano →</a>
@@ -249,6 +304,13 @@ async function renderFicha() {
     const ph = e.target.closest('.photo');
     if (ph) { current.photos = [ph.dataset.id, ...current.photos.filter((x) => x !== ph.dataset.id)]; await db.saveProject(current); renderFicha(); }
   };
+  $('#addvideo').onclick = async () => {
+    const files = await pickFiles('video/*', true);
+    if (!files.length) return;
+    await addVideos(files);
+    renderFicha();
+  };
+  bindVideoCards($('#videos'), renderFicha);
   $('#export').onclick = exportProject;
   $('#save-exit').onclick = async () => { await saveNow(); location.hash = ''; };
   $('#delete').onclick = async () => {
@@ -672,7 +734,10 @@ async function renderVideo() {
       ${shoppingListHTML(p)}
       <h3>Presentación para el cliente</h3>
       <p class="muted small">Un único archivo con los renders elegidos, el plano y los datos del proyecto. Se abre en cualquier móvil sin instalar nada: envíalo por WhatsApp o email.</p>
-      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="p-video" ${vstate.withVideo ? 'checked' : ''} ${vstate.lastVideo ? '' : 'disabled'}> Incluir el vídeo ${vstate.lastVideo ? `(${(vstate.lastVideo.size / 1e6).toFixed(1)} MB)` : '(crea primero el vídeo)'}</label>
+      <h4 style="margin:14px 0 6px">Vídeo final</h4>
+      <p class="muted small" style="margin-top:0">El que va en la presentación. Puede ser el creado aquí o uno subido de otra aplicación.</p>
+      <div class="videos small-cards" id="final-videos">${(await videoCards(p)).join('')}<button class="addphoto" id="addvideo2">+ Subir vídeo</button></div>
+      <label class="small" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="p-video" ${vstate.withVideo ? 'checked' : ''} ${finalVideoOf(p) ? '' : 'disabled'}> Incluir el vídeo final en la presentación</label>
       <div class="row" style="margin-top:10px"><button class="btn dark" id="p-make" ${p.renders.length ? '' : 'disabled'}>Crear presentación</button><button class="btn" id="p-full" ${p.renders.length ? '' : 'disabled'}>⛶ Ver en pantalla completa</button></div>
       <p class="muted small">En pantalla completa: desliza o toca a los lados para pasar, ▶ para pase automático y ✕ para salir. El cliente también tiene el botón al abrir el archivo.</p>
     </div>
@@ -698,6 +763,12 @@ async function renderVideo() {
   $('#v-move').onchange = (e) => { vstate.move = e.target.value; $('#v-prompt').value = videoPrompt(vstate.move); };
   $('#v-copy').onclick = () => copy($('#v-prompt').value);
   $('#p-video').onchange = (e) => (vstate.withVideo = e.target.checked);
+  bindVideoCards($('#final-videos'), renderVideo);
+  $('#addvideo2').onclick = async () => {
+    const files = await pickFiles('video/*', true);
+    if (!files.length) return;
+    await addVideos(files); vstate.withVideo = true; renderVideo();
+  };
   fillShoppingThumbs(p);
   const csv = $('#shop-csv'); if (csv) csv.onclick = () => {
     const rows = [['Pieza', 'Producto', 'Tienda', 'Precio (€)', 'Enlace'], ...productItems(p).map((it) => [it.label, it.product.name, storeName(it.product.store), String(it.product.price || '').replace('.', ','), it.product.url])];
@@ -711,12 +782,14 @@ async function renderVideo() {
       project: p, slides, studio: s.studioName, roomLabel: ROOM_TYPES[p.roomType],
       size: `${fmtM(p.width)} × ${fmtM(p.length)} m${p.width && p.length ? ` (${Math.round(p.width * p.length / 1e4)} m²)` : ''}`,
       planBlob: vstate.plan && p.plan ? await planPNG(p.plan, { title: p.name, subtitle: `${fmtM(p.width)} × ${fmtM(p.length)} m` }) : null,
-      videoBlob: vstate.withVideo ? vstate.lastVideo : null,
+      videoBlob: vstate.withVideo && finalVideoOf(p) ? await db.getFile(finalVideoOf(p).fileId) : null,
       products: await Promise.all(productItems(p).map(async (it) => ({ label: it.label, ...it.product, storeLabel: storeName(it.product.store), blob: it.product.fileId ? await db.getFile(it.product.fileId) : null }))),
     });
   };
   $('#p-make').onclick = async (e) => {
     if (!vstate.picked.length) return toast('Elige al menos un render');
+    const fvid = vstate.withVideo && finalVideoOf(p);
+    if (fvid && fvid.size > 60e6 && !(await confirmDlg(`El vídeo final pesa ${fmtMB(fvid.size)} y la presentación será muy pesada para WhatsApp o email. ¿Incluirlo igualmente?`, 'Incluir'))) vstate.withVideo = false;
     const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner"></span> Preparando…';
     try {
       const html = await makeHTML();
@@ -784,10 +857,13 @@ async function renderVideo() {
       const out = $('#v-out');
       out.innerHTML = `<button class="btn primary" id="v-dl">Descargar vídeo (${(blob.size / 1e6).toFixed(1)} MB)</button><button class="btn" id="v-share">Compartir</button>`;
       vstate.lastVideo = blob;
-      const pv = $('#p-video'); pv.disabled = false; pv.checked = true; vstate.withVideo = true; pv.parentElement.lastChild.textContent = ` Incluir el vídeo (${(blob.size / 1e6).toFixed(1)} MB)`;
+      const v = await addVideos([new File([blob], name, { type: blob.type })], { source: 'app', makeFinal: true });
+      vstate.withVideo = true;
+      const fv = $('#final-videos'); if (fv) { fv.innerHTML = (await videoCards(current)).join('') + '<button class="addphoto" id="addvideo2">+ Subir vídeo</button>'; bindVideoCards(fv, renderVideo); $('#addvideo2').onclick = async () => { const fs = await pickFiles('video/*', true); if (fs.length) { await addVideos(fs); renderVideo(); } }; }
+      const pv = $('#p-video'); pv.disabled = false; pv.checked = true;
+      toast(v ? 'Guardado en el proyecto como vídeo final' : 'Vídeo listo');
       $('#v-dl').onclick = () => download(blob, name);
       $('#v-share').onclick = async () => { if (!(await shareFiles([new File([blob], name, { type: blob.type })], p.name))) download(blob, name); };
-      toast('Vídeo listo');
     } catch (err) { toast('No se pudo grabar el vídeo: ' + err.message, 6000); }
     b.disabled = false; b.textContent = 'Crear vídeo';
   };
@@ -883,7 +959,7 @@ function openSettings() {
 // ---------- exportar / importar proyecto (con imágenes)
 async function exportProject() {
   const p = current;
-  const ids = [...p.photos, ...p.renders.map((r) => r.fileId), ...(p.plan?.items || []).map((it) => it.product?.fileId).filter(Boolean)];
+  const ids = db.projectFileIds(p);
   const files = {};
   for (const id of ids) {
     const b = await db.getFile(id); if (!b) continue;
@@ -912,6 +988,8 @@ async function importData(data) {
     p.photos = p.photos.map((id) => map[id]).filter(Boolean);
     p.renders = p.renders.map((r) => ({ ...r, fileId: map[r.fileId] })).filter((r) => r.fileId);
     (p.plan?.items || []).forEach((it) => { if (it.product?.fileId) it.product.fileId = map[it.product.fileId] || ''; });
+    p.videos = (p.videos || []).map((v) => ({ ...v, fileId: map[v.fileId] })).filter((v) => v.fileId);
+    p.finalVideo = p.videos.find((v) => v.id === p.finalVideo) ? p.finalVideo : null;
     await db.saveProject(p);
     return p;
 }

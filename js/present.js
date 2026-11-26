@@ -64,7 +64,7 @@ footer b{color:var(--ink);display:block;font-size:16px;margin-bottom:4px}
 .ss.on{display:block}.ss .sl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .6s}
 .ss .sl.cur{opacity:1}.ss .sl img{max-width:100%;max-height:100%;object-fit:contain}.ss .sl.plan{background:#fff}
 .ss .cap{position:absolute;left:0;right:0;bottom:0;padding:40px 6vw 28px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:clamp(16px,2.2vw,24px);text-align:center}
-.ss .sl.plan .cap{display:none}
+.ss .sl.plan .cap{display:none}.ss .sl video{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;background:#000}.ss .sl:not(.cur){pointer-events:none}
 .ss .cover{flex-direction:column;text-align:center;background:#111 center/cover}.ss .cover::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55)}
 .ss .cover>*{position:relative}.ss .cover h1{font-size:clamp(36px,7vw,80px);margin:10px 0}.ss .cover small{letter-spacing:.14em;text-transform:uppercase;opacity:.85}
 .ss .ctl{position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:3;transition:opacity .4s}.ss.idle .ctl,.ss.idle .nav{opacity:0}
@@ -91,6 +91,7 @@ ${plan ? `<h2>Distribución</h2><div class="plan"><img src="${plan}" alt="Plano"
 <div class="ss" id="ss">
 <div class="sl cover" style="background-image:url('${hero}')"><small>${esc(studio || 'Propuesta de reforma')}</small><h1>${esc(project.name)}</h1><p>${project.client ? `Para ${esc(project.client)}` : esc(date)}</p></div>
 ${imgs.map((im) => `<div class="sl"><img src="${im.src}" alt="">${im.caption ? `<div class="cap">${esc(im.caption)}</div>` : ''}</div>`).join('')}
+${video ? '<div class="sl vid"></div>' : ''}
 ${plan ? `<div class="sl plan"><img src="${plan}" alt="Plano"></div>` : ''}
 <div class="ctl"><button id="ss-play" title="Pase automático">▶</button><button id="ss-close" title="Salir">✕</button></div>
 <button class="nav prev" id="ss-prev" aria-label="Anterior">‹</button><button class="nav next" id="ss-next" aria-label="Siguiente">›</button>
@@ -100,9 +101,10 @@ const lb=document.getElementById('lb');
 document.querySelectorAll('figure img,.plan img').forEach(i=>i.onclick=()=>{lb.firstElementChild.src=i.src;lb.classList.add('on')});
 lb.onclick=()=>lb.classList.remove('on');
 (()=>{const ss=document.getElementById('ss');if(!ss)return;const sl=[...ss.querySelectorAll('.sl')];let i=0,timer=null,idle=null;
-const show=n=>{i=(n+sl.length)%sl.length;sl.forEach((x,k)=>x.classList.toggle('cur',k===i));document.getElementById('ss-dots').textContent=(i+1)+' / '+sl.length};
+const vs=ss.querySelector('.sl.vid');if(vs){const src=document.querySelector('main video');const v=document.createElement('video');v.src=src?src.src:'';v.controls=true;v.playsInline=true;v.preload='metadata';v.onclick=e=>e.stopPropagation();v.onended=()=>{if(timer)show(i+1)};vs.append(v)}
+const show=n=>{i=(n+sl.length)%sl.length;sl.forEach((x,k)=>{x.classList.toggle('cur',k===i);const v=x.querySelector('video');if(v){if(k===i){v.currentTime=0;v.play().catch(()=>{})}else v.pause()}});document.getElementById('ss-dots').textContent=(i+1)+' / '+sl.length};
 const wake=()=>{ss.classList.remove('idle');clearTimeout(idle);idle=setTimeout(()=>ss.classList.add('idle'),2500)};
-const play=on=>{clearInterval(timer);timer=on?setInterval(()=>show(i+1),5000):null;document.getElementById('ss-play').textContent=on?'❚❚':'▶'};
+const play=on=>{clearInterval(timer);timer=on?setInterval(()=>{const v=sl[i].querySelector('video');if(v&&!v.paused&&!v.ended)return;show(i+1)},5000):null;document.getElementById('ss-play').textContent=on?'❚❚':'▶'};
 const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
 const open=()=>{ss.classList.add('on');show(0);wake();const r=ss.requestFullscreen||ss.webkitRequestFullscreen;if(r)try{const p=r.call(ss);p&&p.catch&&p.catch(()=>{})}catch(e){}};
 const close=()=>{play(false);if(parent!==window)parent.postMessage('er-close-presentation','*');ss.classList.remove('on');if(fsEl())(document.exitFullscreen||document.webkitExitFullscreen).call(document)};
